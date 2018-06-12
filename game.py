@@ -59,6 +59,7 @@ def dist(a, b):
 	''' Distance between point a and point b '''
 	return math.sqrt( (a[0]-b[0])**2 + (a[1]-b[1])**2 )
 
+
 def g(z):
 	try:
 		result = (1 / (1 + e**-z)) 
@@ -97,9 +98,11 @@ class Player:
 		screen.blit(self.image, self.rect)
 
 		pygame.draw.line(screen, (2,100,2),   ( self.x , self.y ),  ( self.x+40*sin(self.direction), self.y+40*cos(self.direction)), 2  ) 
-		
 
-		for b in self.bullets:
+
+		for index, b in enumerate(self.bullets):
+			if b.outside_screen():
+				self.bullets.remove(b)
 			b.display()
 
 	def shoot(self):
@@ -118,14 +121,17 @@ class Bullet:
 		self.y += self.speed*cos(self.direction)
 		pygame.draw.circle(screen, (255,60,60), (int(self.x), int(self.y)), 5)
 
+	def outside_screen(self):
+		return (self.x < 0 or self.x > width) or (self.y < 0 or self.y > height)
+
 
 class Creature:
 	def __init__(self):
 		self.og_image = pygame.image.load(MUTANT_SPRITE).convert()
 		self.image = self.og_image
 		self.rect = self.image.get_rect()
-		self.x = randint(20,width-20)#width/2#randint(20,width-20)
-		self.y = 20#height/2#randint(20,height-20)
+		self.x = width/2     #width/2#randint(20,width-20)
+		self.y = height/2   #20#height/2#randint(20,height-20)
 		self.direction = randint(0, 359)
 		self.periphery = 108 # degree of vision
 		self.energy = 100
@@ -134,6 +140,8 @@ class Creature:
 		self.right_sensor_pos = (self.x + cos(45-self.direction)*20.5, self.y + sin(45-self.direction)*20.5)
 		self.left_sensor_detect = 0
 		self.right_sensor_detect = 0
+		self.left_sensor_detect_bullet = 0
+		self.right_sensor_detect_bullet = 0
 
 		self.distance2player = 0
 
@@ -154,8 +162,6 @@ class Creature:
 		# inputs to NN including bias unit
 		inupts = np.array((1, self.left_sensor_detect, self.right_sensor_detect, self.distance2player / dist((0,0), (width, height)) ) )
 
-		
-
 		decision = self.make_decision(inupts, self.T1, self.T2)  #randint(-200,100)/100.
 
 		rand = decision[0]*8-4
@@ -168,8 +174,8 @@ class Creature:
 
 		if not (collided_x or collided_y):
 			self.direction += rand*1
-			self.x += 2.5*decision[2]*sin(self.direction)
-			self.y += 2.5*decision[2]*cos(self.direction)
+			#self.x += 2.5*decision[2]*sin(self.direction)
+			#self.y += 2.5*decision[2]*cos(self.direction)
 
 		# rotate
 		self.image = pygame.transform.rotate(self.og_image, self.direction)
@@ -186,13 +192,11 @@ class Creature:
 		self.left_sensor_pos = (self.x + cos(self.direction-45)*0, self.y + sin(self.direction+45+90)*0) 
 		self.right_sensor_pos = (self.x + cos(self.direction-45-90)*0, self.y + sin(self.direction+45)*0)
 
+
 		angle = atan2( (self.x - p.x), (self.y - p.y) )+180
-
-		#print (angle + self.direction)%360
-
+		print angle
 
 		# check sensor detects player
-
 		if 360-self.periphery+90 < (angle + self.direction)%360 or (angle + self.direction)%360 < self.periphery:
 			self.left_sensor_detect = True
 		else:
@@ -205,9 +209,31 @@ class Creature:
 			self.right_sensor_detect = False
 
 
-		pygame.draw.polygon(screen, (100,2,2),   ( (self.left_sensor_pos[0] + cos(-self.periphery+90-self.direction)*20, self.left_sensor_pos[1] + sin(-self.periphery+90-self.direction)*20), self.left_sensor_pos, (self.left_sensor_pos[0] + cos(self.periphery-self.direction)*20, self.left_sensor_pos[1] + sin(self.periphery-self.direction)*20)), 0 if self.left_sensor_detect else 2  ) 
-		pygame.draw.polygon(screen, (100,2,2),   ( (self.right_sensor_pos[0] + cos(self.periphery+90-self.direction)*20, self.right_sensor_pos[1] + sin(self.periphery+90-self.direction)*20), self.right_sensor_pos, (self.right_sensor_pos[0] + cos(180-self.periphery-self.direction)*20, self.right_sensor_pos[1] + sin(180-self.periphery-self.direction)*20)), 0 if self.right_sensor_detect else 2  ) 
+		# check sensor detects bullets
+		for b in p.bullets:
+			angle = atan2( (self.x - b.x), (self.y - b.y) )+180
+			if 360-self.periphery+90 < (angle + self.direction)%360 or (angle + self.direction)%360 < self.periphery:
+				self.left_sensor_detect_bullet = True
+			else:
+				self.left_sensor_detect_bullet = False
+
+
+			if self.periphery+90 > (angle + self.direction)%360 > 180-self.periphery :
+				self.right_sensor_detect_bullet = True
+			else:
+				self.right_sensor_detect_bullet = False
+
+
+		# draw sensors to player
+		#pygame.draw.polygon(screen, (100,2,2),   ( (self.left_sensor_pos[0] + cos(-self.periphery+90-self.direction)*20, self.left_sensor_pos[1] + sin(-self.periphery+90-self.direction)*20), self.left_sensor_pos, (self.left_sensor_pos[0] + cos(self.periphery-self.direction)*20, self.left_sensor_pos[1] + sin(self.periphery-self.direction)*20)), 0 if self.left_sensor_detect else 2  ) 
+		#pygame.draw.polygon(screen, (100,2,2),   ( (self.right_sensor_pos[0] + cos(self.periphery+90-self.direction)*20, self.right_sensor_pos[1] + sin(self.periphery+90-self.direction)*20), self.right_sensor_pos, (self.right_sensor_pos[0] + cos(180-self.periphery-self.direction)*20, self.right_sensor_pos[1] + sin(180-self.periphery-self.direction)*20)), 0 if self.right_sensor_detect else 2  ) 
 		
+
+		# draw sensors to bullets
+		pygame.draw.polygon(screen, (2,180,2),   ( (self.left_sensor_pos[0] + cos(-self.periphery+90-self.direction)*20, self.left_sensor_pos[1] + sin(-self.periphery+90-self.direction)*20), self.left_sensor_pos, (self.left_sensor_pos[0] + cos(self.periphery-self.direction)*20, self.left_sensor_pos[1] + sin(self.periphery-self.direction)*20)), 0 if self.left_sensor_detect_bullet else 2  ) 
+		pygame.draw.polygon(screen, (2,180,2),   ( (self.right_sensor_pos[0] + cos(self.periphery+90-self.direction)*20, self.right_sensor_pos[1] + sin(self.periphery+90-self.direction)*20), self.right_sensor_pos, (self.right_sensor_pos[0] + cos(180-self.periphery-self.direction)*20, self.right_sensor_pos[1] + sin(180-self.periphery-self.direction)*20)), 0 if self.right_sensor_detect_bullet else 2  ) 
+		
+
 
 		#pygame.draw.line(screen, (2,100,2),   ( p.x , p.y ),  ( self.x, self.y), 2  ) 
 		
@@ -285,7 +311,7 @@ class Game:
 
 
 		self.creatures = []
-		for i in range(10):
+		for i in range(1):
 			dude = Creature()
 			self.creatures.append(dude)
 
@@ -345,10 +371,8 @@ class Game:
 
 				if self.key_right:
 					self.player.direction -= 2.5
-					print self.player.direction
 				if self.key_left:
 					self.player.direction += 2.5
-					print self.player.direction
 
 				if self.key_up:
 					self.player.vel = 2
@@ -360,12 +384,6 @@ class Game:
 
 			pygame.display.update()
 
-
-
-c = []
-for i in range(10):
-	dude = Creature()
-	c.append(dude)
 
 game = Game()
 game.run()
