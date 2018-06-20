@@ -58,7 +58,34 @@ def atan2(x, y):
 def dist(a, b):
 	''' Distance between point a and point b '''
 	return math.sqrt( (a[0]-b[0])**2 + (a[1]-b[1])**2 )
+def angle_between(a, b):
+	''' Angle between point a and b 
 
+		  135			   45
+	 	  b *			  * b 
+
+				  * a     * b 0
+
+		    
+			* b   * b   
+			225   270
+	'''
+	return -atan2( a[0]-b[0], a[1]-b[1] )+180
+
+def wall_proximity(x,y):
+	_x = _y = 0
+
+	if x < 60:
+		_x = (x-60)**2 / 1000
+	if x > width-60:
+		_x = (x-(width-60))**2 / 1000
+
+	if y < 60:
+		_y = (y-60)**2 / 1000
+	if y > height-60:
+		_y = (y-(height-60))**2 / 1000
+
+	return (_x + _y)/2
 
 def g(z):
 	try:
@@ -105,6 +132,7 @@ class Player:
 				self.bullets.remove(b)
 			b.display()
 
+
 	def shoot(self):
 		self.bullets.append(Bullet( self.x+12*sin(self.direction), self.y+12*cos(self.direction), self.direction))
 
@@ -138,17 +166,29 @@ class Creature:
 
 		self.left_sensor_pos = (self.x + cos(135-self.direction)*20.5, self.y + sin(135-self.direction)*20.5) 
 		self.right_sensor_pos = (self.x + cos(45-self.direction)*20.5, self.y + sin(45-self.direction)*20.5)
+
+		# parameters
 		self.left_sensor_detect = 0
 		self.right_sensor_detect = 0
 		self.left_sensor_detect_bullet = 0
 		self.right_sensor_detect_bullet = 0
+		self.wall_proximity = 0
 
 		self.distance2player = 0
 
 		# Numbers of neurons in each layer
-		self.s = (None, 3, 6, 3)
+		self.s = (None, 6, 6, 3)
 
-		# Theta values
+		''' Theta values
+		left_sensor_detect 			10	-8
+		right_sensor_detect 		10	+8
+		distance2player  			15	+10
+		left_sensor_detect_bullet 	20	-16	
+		right_sensor_detect_bullet 	20	+16
+		wall_proximity 				20	+18
+
+
+		'''
 		self.T1 = np.random.random((self.s[2], self.s[1]+1)) * 10 - 5
 		self.T2 = np.random.random((self.s[3], self.s[2]+1)) * 10 - 5
 
@@ -160,7 +200,7 @@ class Creature:
 		#move direction
 
 		# inputs to NN including bias unit
-		inupts = np.array((1, self.left_sensor_detect, self.right_sensor_detect, self.distance2player / dist((0,0), (width, height)) ) )
+		inupts = np.array((1, self.left_sensor_detect, self.right_sensor_detect, self.distance2player / dist((0,0), (width, height)), self.left_sensor_detect_bullet, self.right_sensor_detect_bullet, self.wall_proximity ) )
 
 		decision = self.make_decision(inupts, self.T1, self.T2)  #randint(-200,100)/100.
 
@@ -174,8 +214,8 @@ class Creature:
 
 		if not (collided_x or collided_y):
 			self.direction += rand*1
-			#self.x += 2.5*decision[2]*sin(self.direction)
-			#self.y += 2.5*decision[2]*cos(self.direction)
+			self.x += 1*decision[2]*sin(self.direction)
+			self.y += 1*decision[2]*cos(self.direction)
 
 		# rotate
 		self.image = pygame.transform.rotate(self.og_image, self.direction)
@@ -193,40 +233,47 @@ class Creature:
 		self.right_sensor_pos = (self.x + cos(self.direction-45-90)*0, self.y + sin(self.direction+45)*0)
 
 
-		angle = atan2( (self.x - p.x), (self.y - p.y) )+180
-		print angle
+		#angle = atan2( (self.x - p.x), (self.y - p.y) )+180
+		angle = angle_between((self.x, self.y), (p.x, p.y))
+		#print angle
 
 		# check sensor detects player
-		if 360-self.periphery+90 < (angle + self.direction)%360 or (angle + self.direction)%360 < self.periphery:
-			self.left_sensor_detect = True
+		if 360-self.periphery+90 < (-angle + self.direction)%360 or (-angle + self.direction)%360 < self.periphery:
+			self.left_sensor_detect = 1
 		else:
-			self.left_sensor_detect = False
+			self.left_sensor_detect = 0
 
 
-		if self.periphery+90 > (angle + self.direction)%360 > 180-self.periphery :
-			self.right_sensor_detect = True
+		if self.periphery+90 > (-angle + self.direction)%360 > 180-self.periphery :
+			self.right_sensor_detect = 1
 		else:
-			self.right_sensor_detect = False
+			self.right_sensor_detect = 0
 
 
 		# check sensor detects bullets
+		self.left_sensor_detect_bullet = 0
+		self.right_sensor_detect_bullet = 0
 		for b in p.bullets:
-			angle = atan2( (self.x - b.x), (self.y - b.y) )+180
-			if 360-self.periphery+90 < (angle + self.direction)%360 or (angle + self.direction)%360 < self.periphery:
-				self.left_sensor_detect_bullet = True
+			angle = angle_between( (self.x, self.y), (b.x, b.y) )
+			#print angle
+			if 360-self.periphery+90 < (-angle + self.direction)%360 or (-angle + self.direction)%360 < self.periphery:
+				self.left_sensor_detect_bullet = 1
 			else:
-				self.left_sensor_detect_bullet = False
+				self.left_sensor_detect_bullet = 0
 
 
-			if self.periphery+90 > (angle + self.direction)%360 > 180-self.periphery :
-				self.right_sensor_detect_bullet = True
+			if self.periphery+90 > (-angle + self.direction)%360 > 180-self.periphery :
+				self.right_sensor_detect_bullet = 1
 			else:
-				self.right_sensor_detect_bullet = False
+				self.right_sensor_detect_bullet = 0
+
+		self.wall_proximity = wall_proximity(self.x, self.y)
+
 
 
 		# draw sensors to player
-		#pygame.draw.polygon(screen, (100,2,2),   ( (self.left_sensor_pos[0] + cos(-self.periphery+90-self.direction)*20, self.left_sensor_pos[1] + sin(-self.periphery+90-self.direction)*20), self.left_sensor_pos, (self.left_sensor_pos[0] + cos(self.periphery-self.direction)*20, self.left_sensor_pos[1] + sin(self.periphery-self.direction)*20)), 0 if self.left_sensor_detect else 2  ) 
-		#pygame.draw.polygon(screen, (100,2,2),   ( (self.right_sensor_pos[0] + cos(self.periphery+90-self.direction)*20, self.right_sensor_pos[1] + sin(self.periphery+90-self.direction)*20), self.right_sensor_pos, (self.right_sensor_pos[0] + cos(180-self.periphery-self.direction)*20, self.right_sensor_pos[1] + sin(180-self.periphery-self.direction)*20)), 0 if self.right_sensor_detect else 2  ) 
+		pygame.draw.polygon(screen, (100,2,2),   ( (self.left_sensor_pos[0] + cos(-self.periphery+90-self.direction)*20, self.left_sensor_pos[1] + sin(-self.periphery+90-self.direction)*20), self.left_sensor_pos, (self.left_sensor_pos[0] + cos(self.periphery-self.direction)*20, self.left_sensor_pos[1] + sin(self.periphery-self.direction)*20)), 0 if self.left_sensor_detect else 2  ) 
+		pygame.draw.polygon(screen, (100,2,2),   ( (self.right_sensor_pos[0] + cos(self.periphery+90-self.direction)*20, self.right_sensor_pos[1] + sin(self.periphery+90-self.direction)*20), self.right_sensor_pos, (self.right_sensor_pos[0] + cos(180-self.periphery-self.direction)*20, self.right_sensor_pos[1] + sin(180-self.periphery-self.direction)*20)), 0 if self.right_sensor_detect else 2  ) 
 		
 
 		# draw sensors to bullets
@@ -239,7 +286,7 @@ class Creature:
 		
 
 
-		self.distance2player = dist((self.x, self.y), (p.x, p.y) )
+		self.distance2player = dist((self.x, self.y), (p.x, p.y))
 
 
 
@@ -311,7 +358,7 @@ class Game:
 
 
 		self.creatures = []
-		for i in range(1):
+		for i in range(30):
 			dude = Creature()
 			self.creatures.append(dude)
 
