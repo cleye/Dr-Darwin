@@ -58,6 +58,7 @@ def atan2(x, y):
 def dist(a, b):
 	''' Distance between point a and point b '''
 	return math.sqrt( (a[0]-b[0])**2 + (a[1]-b[1])**2 )
+
 def angle_between(a, b):
 	''' Angle between point a and b 
 
@@ -134,7 +135,7 @@ class Player:
 
 
 	def shoot(self):
-		self.bullets.append(Bullet( self.x+12*sin(self.direction), self.y+12*cos(self.direction), self.direction))
+		self.bullets.append(Bullet( self.x+12*sin(self.direction), self.y+12*cos(self.direction), self.direction%360))
 
 
 class Bullet:
@@ -159,10 +160,11 @@ class Creature:
 		self.image = self.og_image
 		self.rect = self.image.get_rect()
 		self.x = width/2     #width/2#randint(20,width-20)
-		self.y = height/2   #20#height/2#randint(20,height-20)
+		self.y = 100   #20#height/2#randint(20,height-20)
 		self.direction = randint(0, 359)
 		self.periphery = 108 # degree of vision
-		self.energy = 100
+		self.life = 100
+		self.alive = True
 
 		self.left_sensor_pos = (self.x + cos(135-self.direction)*20.5, self.y + sin(135-self.direction)*20.5) 
 		self.right_sensor_pos = (self.x + cos(45-self.direction)*20.5, self.y + sin(45-self.direction)*20.5)
@@ -180,22 +182,26 @@ class Creature:
 		self.s = (None, 6, 6, 3)
 
 		''' Theta values
+		bias_unit 					10	-5
 		left_sensor_detect 			10	-8
 		right_sensor_detect 		10	+8
 		distance2player  			15	+10
 		left_sensor_detect_bullet 	20	-16	
 		right_sensor_detect_bullet 	20	+16
 		wall_proximity 				20	+18
-
-
 		'''
-		self.T1 = np.random.random((self.s[2], self.s[1]+1)) * 10 - 5
-		self.T2 = np.random.random((self.s[3], self.s[2]+1)) * 10 - 5
+		weights = 10 #[10,10,10,15,20,20,20]
+		bias = -5 #[-5,-8,8,10,-16,16,18]
+		self.T1 = np.random.random((self.s[2], self.s[1]+1)) * weights + bias
+		self.T2 = np.random.random((self.s[3], self.s[2]+1)) * weights + bias
+		print self.T1
 
 
 	def display(self):
 		global game
 		p = game.player
+
+
 
 		#move direction
 
@@ -204,7 +210,8 @@ class Creature:
 
 		decision = self.make_decision(inupts, self.T1, self.T2)  #randint(-200,100)/100.
 
-		rand = decision[0]*8-4
+		rand = decision[0]*4-2
+		#print decision[0]
 
 
 		# move
@@ -212,10 +219,13 @@ class Creature:
 		collided_x = (self.x < 0 or self.x > width)
 		collided_y = (self.y < 0 or self.y > height)
 
-		if not (collided_x or collided_y):
+		if (collided_x or collided_y):
+			self.die()
+		else:
 			self.direction += rand*1
-			self.x += 1*decision[2]*sin(self.direction)
-			self.y += 1*decision[2]*cos(self.direction)
+			self.x += 1.6*decision[2]*sin(self.direction)
+			self.y += 1.6*decision[2]*cos(self.direction)
+			self.life -= decision[2]*0.04
 
 		# rotate
 		self.image = pygame.transform.rotate(self.og_image, self.direction)
@@ -249,23 +259,29 @@ class Creature:
 		else:
 			self.right_sensor_detect = 0
 
-
 		# check sensor detects bullets
 		self.left_sensor_detect_bullet = 0
 		self.right_sensor_detect_bullet = 0
 		for b in p.bullets:
 			angle = angle_between( (self.x, self.y), (b.x, b.y) )
-			#print angle
-			if 360-self.periphery+90 < (-angle + self.direction)%360 or (-angle + self.direction)%360 < self.periphery:
-				self.left_sensor_detect_bullet = 1
-			else:
-				self.left_sensor_detect_bullet = 0
+
+			# if bullet is moving in direction of creature
+			if -80 > p.direction - angle > -100:
+				if 360-self.periphery+90 < (-angle + self.direction)%360 or (-angle + self.direction)%360 < self.periphery:
+					self.left_sensor_detect_bullet = 1
+				else:
+					self.left_sensor_detect_bullet = 0
 
 
-			if self.periphery+90 > (-angle + self.direction)%360 > 180-self.periphery :
-				self.right_sensor_detect_bullet = 1
-			else:
-				self.right_sensor_detect_bullet = 0
+				if self.periphery+90 > (-angle + self.direction)%360 > 180-self.periphery :
+					self.right_sensor_detect_bullet = 1
+				else:
+					self.right_sensor_detect_bullet = 0
+
+			if dist((b.x, b.y), (self.x, self.y)) < 20:
+				self.life -= randint(20,50)
+				p.bullets.remove(b)
+
 
 		self.wall_proximity = wall_proximity(self.x, self.y)
 
@@ -277,16 +293,23 @@ class Creature:
 		
 
 		# draw sensors to bullets
-		pygame.draw.polygon(screen, (2,180,2),   ( (self.left_sensor_pos[0] + cos(-self.periphery+90-self.direction)*20, self.left_sensor_pos[1] + sin(-self.periphery+90-self.direction)*20), self.left_sensor_pos, (self.left_sensor_pos[0] + cos(self.periphery-self.direction)*20, self.left_sensor_pos[1] + sin(self.periphery-self.direction)*20)), 0 if self.left_sensor_detect_bullet else 2  ) 
-		pygame.draw.polygon(screen, (2,180,2),   ( (self.right_sensor_pos[0] + cos(self.periphery+90-self.direction)*20, self.right_sensor_pos[1] + sin(self.periphery+90-self.direction)*20), self.right_sensor_pos, (self.right_sensor_pos[0] + cos(180-self.periphery-self.direction)*20, self.right_sensor_pos[1] + sin(180-self.periphery-self.direction)*20)), 0 if self.right_sensor_detect_bullet else 2  ) 
+		#pygame.draw.polygon(screen, (2,180,2),   ( (self.left_sensor_pos[0] + cos(-self.periphery+90-self.direction)*20, self.left_sensor_pos[1] + sin(-self.periphery+90-self.direction)*20), self.left_sensor_pos, (self.left_sensor_pos[0] + cos(self.periphery-self.direction)*20, self.left_sensor_pos[1] + sin(self.periphery-self.direction)*20)), 0 if self.left_sensor_detect_bullet else 2  ) 
+		#pygame.draw.polygon(screen, (2,180,2),   ( (self.right_sensor_pos[0] + cos(self.periphery+90-self.direction)*20, self.right_sensor_pos[1] + sin(self.periphery+90-self.direction)*20), self.right_sensor_pos, (self.right_sensor_pos[0] + cos(180-self.periphery-self.direction)*20, self.right_sensor_pos[1] + sin(180-self.periphery-self.direction)*20)), 0 if self.right_sensor_detect_bullet else 2  ) 
 		
 
+		# draw life
+		#pygame.draw.rect(screen, (255,100,70), (self.x-30, self.y-20, 60, 6))
+		pygame.draw.rect(screen, (60,190,100), (self.x-30, self.y-20, self.life*60/100, 6), 0)
+		pygame.draw.rect(screen, (255,255,255), (self.x-30, self.y-20, 60, 6), 1)
 
 		#pygame.draw.line(screen, (2,100,2),   ( p.x , p.y ),  ( self.x, self.y), 2  ) 
 		
 
-
 		self.distance2player = dist((self.x, self.y), (p.x, p.y))
+
+
+		if self.life < 0:
+			self.die()
 
 
 
@@ -314,6 +337,9 @@ class Creature:
 		# Return all activation units
 		#print a3
 		return a3
+
+	def die(self):
+		self.alive = False
 
 
 class Level:
@@ -358,7 +384,7 @@ class Game:
 
 
 		self.creatures = []
-		for i in range(30):
+		for i in range(10):
 			dude = Creature()
 			self.creatures.append(dude)
 
@@ -410,7 +436,10 @@ class Game:
 				screen.fill((0,0,0))
 
 				for dude in self.creatures:
-					dude.display()
+					if dude.alive:
+						dude.display()
+					else:
+						self.creatures.remove(dude)
 				
 				self.player.display()
 				#self.level.display()
