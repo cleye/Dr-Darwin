@@ -4,7 +4,7 @@ import numpy as np
 import math
 from button import Button
 from math import pi, e
-from random import randint 
+from random import randint, random
 from pygame.locals import *
 
 pygame.init()
@@ -78,18 +78,16 @@ def angle_between(a, b):
 	return -atan2( a[0]-b[0], a[1]-b[1] )+180
 
 def wall_proximity(x,y):
+	''' Returns a number proportional to the square distance to wall '''
 	_x = _y = 0
-
 	if x < 60:
 		_x = (x-60)**2 / 1000
 	if x > width-60:
 		_x = (x-(width-60))**2 / 1000
-
 	if y < 60:
 		_y = (y-60)**2 / 1000
 	if y > height-60:
 		_y = (y-(height-60))**2 / 1000
-
 	return (_x + _y)/2
 
 def g(z):
@@ -164,7 +162,7 @@ class Bullet:
 
 
 class Creature:
-	def __init__(self, _id):
+	def __init__(self, _id, T1=None, T2=None):
 		self.og_image = pygame.image.load(MUTANT_SPRITE).convert()
 		self.image = self.og_image
 		self.rect = self.image.get_rect()
@@ -181,27 +179,33 @@ class Creature:
 		self.fitness_rewards = 0
 		self.fitness_punish = 0
 		self.avg_distance2player = 0
-		right_sensor_pos = (self.x + cos(45-self.direction)*20.5, self.y + sin(45-self.direction)*20.5)
 
 
 		self.distance2player = 0
 
 		# Numbers of neurons in each layer
-		self.s = (None, 6, 6, 3)
+		self.s = (None, 6, 4, 2)
 
 		''' Theta values
 		bias_unit 					10	-5
-		left_sensor_detect 			10	-8
-		right_sensor_detect 		10	+8
-		distance2player  			15	+10
-		left_sensor_detect_bullet 	20	-16	
-		right_sensor_detect_bullet 	20	+16
-		wall_proximity 				20	+18
+		left_sensor_detect 			10	-5
+		right_sensor_detect 		10	-5
+		distance2player  			16	-8
+		left_sensor_detect_bullet 	20	-10	
+		right_sensor_detect_bullet 	20	-10
+		wall_proximity 				20	-10
 		'''
-		weights = 10 #10 #[10,10,10,15,20,20,20]
-		bias = -5 #-5 #[-5,-8,8,10,-16,16,18]
-		self.T1 = np.random.random((self.s[2], self.s[1]+1)) * weights + bias
-		self.T2 = np.random.random((self.s[3], self.s[2]+1)) * weights + bias
+		if T1 is None:
+			weights = [10,10,10,16,20,20,20] #10 #[10,10,10,16,20,20,20]
+			bias = [-5,-5,-5,-8,-10,-10,-10] #-5 #[-5,-5,-5,-8,-10,10,10]
+			self.T1 = np.random.random((self.s[2], self.s[1]+1)) * weights + bias
+		else:
+			self.T1 = T1
+
+		if T2 is None:
+			self.T2 = np.random.random((self.s[3], self.s[2]+1)) * 10 - 5
+		else:
+			self.T2 = T2
 
 
 	def display(self):
@@ -218,8 +222,8 @@ class Creature:
 
 		screen.blit(self.image, self.rect)
 
-		left_sensor_pos = (self.x + cos(self.direction-45)*0, self.y + sin(self.direction+45+90)*0) 
-		right_sensor_pos = (self.x + cos(self.direction-45-90)*0, self.y + sin(self.direction+45)*0)
+		left_sensor_pos = (self.x + cos(self.direction-45)*18, self.y + sin(self.direction+45+90)*18) 
+		right_sensor_pos = (self.x + cos(self.direction-45-90)*18, self.y + sin(self.direction+45)*18)
 
 
 		#angle = atan2( (self.x - p.x), (self.y - p.y) )+180
@@ -246,7 +250,7 @@ class Creature:
 			angle = angle_between( (self.x, self.y), (b.x, b.y) )
 
 			# if bullet is moving in direction of creature
-			if -80 > p.direction - angle > -100:
+			if -45 > p.direction - angle > -135:
 				if 360-self.periphery+90 < (-angle + self.direction)%360 or (-angle + self.direction)%360 < self.periphery:
 					left_sensor_detect_bullet = 1
 				else:
@@ -269,9 +273,12 @@ class Creature:
 
 
 		# draw sensors to player
-		pygame.draw.polygon(screen, (100,2,2),   ( (left_sensor_pos[0] + cos(-self.periphery+90-self.direction)*20, left_sensor_pos[1] + sin(-self.periphery+90-self.direction)*20), left_sensor_pos, (left_sensor_pos[0] + cos(self.periphery-self.direction)*20, left_sensor_pos[1] + sin(self.periphery-self.direction)*20)), 0 if left_sensor_detect else 2  ) 
-		pygame.draw.polygon(screen, (100,2,2),   ( (right_sensor_pos[0] + cos(self.periphery+90-self.direction)*20, right_sensor_pos[1] + sin(self.periphery+90-self.direction)*20), right_sensor_pos, (right_sensor_pos[0] + cos(180-self.periphery-self.direction)*20, right_sensor_pos[1] + sin(180-self.periphery-self.direction)*20)), 0 if right_sensor_detect else 2  ) 
-		
+		#pygame.draw.polygon(screen, (100,2,2),   ( (left_sensor_pos[0] + cos(-self.periphery+90-self.direction)*20, left_sensor_pos[1] + sin(-self.periphery+90-self.direction)*20), left_sensor_pos, (left_sensor_pos[0] + cos(self.periphery-self.direction)*20, left_sensor_pos[1] + sin(self.periphery-self.direction)*20)), 0 if left_sensor_detect else 2  ) 
+		#pygame.draw.polygon(screen, (100,2,2),   ( (right_sensor_pos[0] + cos(self.periphery+90-self.direction)*20, right_sensor_pos[1] + sin(self.periphery+90-self.direction)*20), right_sensor_pos, (right_sensor_pos[0] + cos(180-self.periphery-self.direction)*20, right_sensor_pos[1] + sin(180-self.periphery-self.direction)*20)), 0 if right_sensor_detect else 2  ) 
+		if left_sensor_detect:
+			pygame.draw.ellipse(screen, (200,230,20), (left_sensor_pos[0]-6, left_sensor_pos[1]-6, 12, 12), )
+		if right_sensor_detect:
+			pygame.draw.ellipse(screen, (200,230,20), (right_sensor_pos[0]-6, right_sensor_pos[1]-6, 12, 12))
 
 		# draw sensors to bullets
 		#pygame.draw.polygon(screen, (2,180,2),   ( (left_sensor_pos[0] + cos(-self.periphery+90-self.direction)*20, left_sensor_pos[1] + sin(-self.periphery+90-self.direction)*20), left_sensor_pos, (left_sensor_pos[0] + cos(self.periphery-self.direction)*20, left_sensor_pos[1] + sin(self.periphery-self.direction)*20)), 0 if left_sensor_detect_bullet else 2  ) 
@@ -295,8 +302,7 @@ class Creature:
 			does_damage_to_player = 1
 
 		if self.health < 0:
-			pass
-			#self.die()
+			self.die()
 
 
 		#move direction
@@ -304,24 +310,21 @@ class Creature:
 		# inputs to NN including bias unit
 		inupts = np.array((1, left_sensor_detect, right_sensor_detect, self.distance2player / dist((0,0), (width, height)), left_sensor_detect_bullet, right_sensor_detect_bullet, wall_proximity_ ) )
 
-		decision = self.make_decision(inupts, self.T1, self.T2)  #randint(-200,100)/100.
-
-		rand = decision[0]*4-2
-		#print decision[0]
-
+		[output_direction, output_velocity] = self.make_decision(inupts, self.T1, self.T2)  #randint(-200,100)/100.
 
 		# move
-
 		collided_x = (self.x < 0 or self.x > width)
 		collided_y = (self.y < 0 or self.y > height)
 
+		hit_wall = 0
 		if (collided_x or collided_y):
+			hit_wall = 1
 			self.die()
 		else:
-			self.direction += rand*3
-			self.x += 1.6*decision[2]*sin(self.direction)
-			self.y += 1.6*decision[2]*cos(self.direction)
-			self.health -= decision[2]*0.04
+			self.direction += output_direction*6-3
+			self.x += 1.6*output_velocity*sin(self.direction)
+			self.y += 1.6*output_velocity*cos(self.direction)
+			self.health -= output_velocity*0.04
 
 		# rotate
 		self.image = pygame.transform.rotate(self.og_image, self.direction)
@@ -330,9 +333,7 @@ class Creature:
 		self.rect = self.image.get_rect()  # Replace old rect with new rect.
 		self.rect.center = (self.x, self.y)  # Put the new rect's center at old center.
 
-	#	self.compute_fitness()
-
-	#def compute_fitness(self):
+		# calculate average distance to player
 		# could use timestep to do this
 		self.distance2player = dist((self.x, self.y), (p.x, p.y))
 		if game.play_time == 0:
@@ -342,7 +343,7 @@ class Creature:
 
 		# detects if stationary
 		stationary = 0
-		if decision[2] < 0.1:
+		if output_velocity < 0.04:
 			stationary = 1
 
 
@@ -353,22 +354,18 @@ class Creature:
 		time with player in sight
 		--ability to sense bullets and dodge them--
 		'''
-		self.fitness_rewards += does_damage_to_player*50 + left_sensor_detect/400. + right_sensor_detect/400.
+		self.fitness_rewards += does_damage_to_player*50 + left_sensor_detect/200. + right_sensor_detect/200.
 
 		''' punishes:
 		being stationary
 		--running into walls--
 		hitting bullets
 		'''
-		self.fitness_punish += stationary/10. + hit_by_bullet*40
+		self.fitness_punish += stationary/10. + hit_by_bullet*10 + hit_wall*10
 
 		self.fitness += (self.fitness_rewards - self.fitness_punish)
 
 		#print self.distance2player, self.fitness
-
-
-
-
 
 
 	def make_decision(self, inputs, T1, T2):
@@ -385,7 +382,6 @@ class Creature:
 		# Add bias units 					
 		a2 = np.insert(a2, 0, 1)	
 
-
 		# LAYER 3 (output layer)
 		# Sum up parameters with dot product
 		z = np.dot(T2, a2)
@@ -399,6 +395,12 @@ class Creature:
 	def die(self):
 		self.alive = False
 
+	def mutated_child(self, mutability=0.2):
+		# new theta values (chromosomes) come from multiplying current theta values by random amount
+		T1 = self.T1 * (1 + np.random.random((self.s[2], self.s[1]+1))*mutability)
+		T2 = self.T2 * (1 + np.random.random((self.s[3], self.s[2]+1))*mutability)
+
+		return Creature(69, T1, T2)
 
 class Level:
 	def __init__(self, matrix):
@@ -445,26 +447,24 @@ class Game:
 			self.play_start = pygame.time.get_ticks()
 		self.play_button.mouse_up = play_action
 
-
+		self.population = 6
 		self.creatures = []
-		for i in range(4):
+		for i in range(self.population):
 			dude = Creature(i)
 			self.creatures.append(dude)
-
 
 	def run(self):
 		global frame_time, frame
 
 		last_frame_time = 0
 
-		while True:
+		done = False
+		while not done:
 
 			# event handling
 			for event in pygame.event.get():
 				if event.type == QUIT:
-					pygame.quit()
-					sys.exit()
-
+					done = True
 				if event.type == KEYDOWN:
 					if event.key == K_RIGHT: 
 						self.key_right = True				
@@ -528,10 +528,30 @@ class Game:
 
 			self.creatures.sort(key=lambda x: x.fitness, reverse=True)
 
-			s = ""
+
+			# show fitness of creatures
+			thefont = pygame.font.SysFont("Arial", 20)
+			i = 0
 			for dude in self.creatures:
-				s += str(dude.id) + " "
-			print s
+				mage = thefont.render("%s - %.2f" % (dude.id, dude.fitness), False, (255,255,255))
+				screen.blit(mage, (width-120, 40*i+40))
+				i+=1
+
+			# show time
+			mage = thefont.render("%.1f" % (20-self.play_time/1000.), False, (255,255,255))
+			pygame.draw.rect(screen, (240,100,100), (0,0,width-(width*self.play_time/20000.), 10)  )
+			screen.blit(mage, (20,20))
+
+			# parent selection
+			if self.play_time/1000. >= 20:
+				#fitnesses = np.array([dude.fitness for dude in self.creatures])
+				# convert fitnesses into probabilities
+				#_weights = (fitnesses - min(fitnesses)) / sum(fitnesses - min(fitnesses))
+				#parents = np.random.choice(self.creatures, size=3, p=_weights, replace=False)
+				#print parents
+				#done = True
+				pass
+
 
 
 			pygame.display.update()
@@ -546,6 +566,9 @@ game = Game()
 game.run()
 l = Level(LEVEL)
 
+
+pygame.quit()
+sys.exit()
 
 
 
