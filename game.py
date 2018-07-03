@@ -111,7 +111,7 @@ class Player:
 		self.health = 100
 
 		self.vel = 0
-		self.direction = 0#45
+		self.direction = 180
 
 	def display(self):
 
@@ -144,6 +144,15 @@ class Player:
 	def shoot(self):
 		self.bullets.append(Bullet( self.x+12*sin(self.direction), self.y+12*cos(self.direction), self.direction%360))
 
+	def reset(self):
+		self.x = width/2
+		self.y = height-30
+		self.bullets = []
+		self.health = 100
+
+		self.vel = 0
+		self.direction = 180
+
 
 class Bullet:
 	def __init__(self, x, y, direction):
@@ -166,8 +175,8 @@ class Creature:
 		self.og_image = pygame.image.load(MUTANT_SPRITE).convert()
 		self.image = self.og_image
 		self.rect = self.image.get_rect()
-		self.x = randint(20,width-20)     #width/2#randint(20,width-20)
-		self.y = 160   #20#height/2#randint(20,height-20)
+		self.x = randint(40,width-40)     #width/2#randint(20,width-20)
+		self.y = randint(80,140)   #20#height/2#randint(20,height-20)
 		self.direction = randint(0, 359)
 
 		self.id = _id
@@ -181,7 +190,7 @@ class Creature:
 		self.avg_distance2player = 0
 
 
-		self.distance2player = 0
+		self.distance2player = 9999
 
 		# Numbers of neurons in each layer
 		self.s = (None, 6, 4, 2)
@@ -222,8 +231,8 @@ class Creature:
 
 		screen.blit(self.image, self.rect)
 
-		left_sensor_pos = (self.x + cos(self.direction-45)*18, self.y + sin(self.direction+45+90)*18) 
-		right_sensor_pos = (self.x + cos(self.direction-45-90)*18, self.y + sin(self.direction+45)*18)
+		left_sensor_pos = (self.x + cos(self.direction-45)*10, self.y + sin(self.direction+45+90)*10) 
+		right_sensor_pos = (self.x + cos(self.direction-45-90)*10, self.y + sin(self.direction+45)*10)
 
 
 		#angle = atan2( (self.x - p.x), (self.y - p.y) )+180
@@ -275,10 +284,19 @@ class Creature:
 		# draw sensors to player
 		#pygame.draw.polygon(screen, (100,2,2),   ( (left_sensor_pos[0] + cos(-self.periphery+90-self.direction)*20, left_sensor_pos[1] + sin(-self.periphery+90-self.direction)*20), left_sensor_pos, (left_sensor_pos[0] + cos(self.periphery-self.direction)*20, left_sensor_pos[1] + sin(self.periphery-self.direction)*20)), 0 if left_sensor_detect else 2  ) 
 		#pygame.draw.polygon(screen, (100,2,2),   ( (right_sensor_pos[0] + cos(self.periphery+90-self.direction)*20, right_sensor_pos[1] + sin(self.periphery+90-self.direction)*20), right_sensor_pos, (right_sensor_pos[0] + cos(180-self.periphery-self.direction)*20, right_sensor_pos[1] + sin(180-self.periphery-self.direction)*20)), 0 if right_sensor_detect else 2  ) 
+
+		pygame.draw.ellipse(screen, (20,130,220), (left_sensor_pos[0]-8, left_sensor_pos[1]-8, 16, 16))
+		pygame.draw.ellipse(screen, (20,130,220), (right_sensor_pos[0]-8, right_sensor_pos[1]-8, 16, 16))
+
+		if left_sensor_detect_bullet:
+			pygame.draw.ellipse(screen, (230,130,130), (left_sensor_pos[0]-6, left_sensor_pos[1]-6, 12, 12))
+		if right_sensor_detect_bullet:
+			pygame.draw.ellipse(screen, (230,130,130), (right_sensor_pos[0]-6, right_sensor_pos[1]-6, 12, 12))
+		
 		if left_sensor_detect:
-			pygame.draw.ellipse(screen, (200,230,20), (left_sensor_pos[0]-6, left_sensor_pos[1]-6, 12, 12), )
+			pygame.draw.ellipse(screen, (100,230,20), (left_sensor_pos[0]-4, left_sensor_pos[1]-4, 8, 8))
 		if right_sensor_detect:
-			pygame.draw.ellipse(screen, (200,230,20), (right_sensor_pos[0]-6, right_sensor_pos[1]-6, 12, 12))
+			pygame.draw.ellipse(screen, (100,230,20), (right_sensor_pos[0]-4, right_sensor_pos[1]-4, 8, 8))
 
 		# draw sensors to bullets
 		#pygame.draw.polygon(screen, (2,180,2),   ( (left_sensor_pos[0] + cos(-self.periphery+90-self.direction)*20, left_sensor_pos[1] + sin(-self.periphery+90-self.direction)*20), left_sensor_pos, (left_sensor_pos[0] + cos(self.periphery-self.direction)*20, left_sensor_pos[1] + sin(self.periphery-self.direction)*20)), 0 if left_sensor_detect_bullet else 2  ) 
@@ -400,7 +418,7 @@ class Creature:
 		T1 = self.T1 * (1 + np.random.random((self.s[2], self.s[1]+1))*mutability)
 		T2 = self.T2 * (1 + np.random.random((self.s[3], self.s[2]+1))*mutability)
 
-		return Creature(69, T1, T2)
+		return Creature(self.id, T1, T2)
 
 class Level:
 	def __init__(self, matrix):
@@ -439,19 +457,42 @@ class Game:
 		self.play_start = 0
 		self.play_time = 0
 
-
+		self.creatures = []
+		self.generation = 0
 
 		self.play_button = Button("Play", (40, 160))
 		def play_action():
 			self.state = Game.STATE_GAMEPLAY
+			self.new_generation()
 			self.play_start = pygame.time.get_ticks()
 		self.play_button.mouse_up = play_action
 
-		self.population = 6
-		self.creatures = []
-		for i in range(self.population):
-			dude = Creature(i)
-			self.creatures.append(dude)
+		
+
+	def new_generation(self, population=10):
+
+		# if first generation create new creatures
+		if self.generation == 0:
+			for i in range(population):
+				c = Creature(i)
+				self.creatures.append(c)
+		# otherwise mutate and create new creatures
+		else:
+			# fitnesses of all creatures
+			fitnesses = np.array([dude.fitness for dude in self.creatures])
+			# convert fitnesses into weighted probabilities
+			_weights = (fitnesses - min(fitnesses)) / sum(fitnesses - min(fitnesses))
+			# choose half of generation to survive and mutate
+			parents = np.random.choice(self.creatures, size=population/2, p=_weights, replace=False)
+			offspring = [parent.mutated_child() for parent in parents]
+			# sets first half of creature generation as offspring
+			self.creatures = offspring
+			# sets second half of creature generation as random
+			for i in range(population/2, population):
+				c = Creature(i)
+				self.creatures.append(c)
+
+		self.generation += 1
 
 	def run(self):
 		global frame_time, frame
@@ -525,33 +566,28 @@ class Game:
 
 				self.play_time = pygame.time.get_ticks() - self.play_start
 
+				# show fitness of creatures
+				thefont = pygame.font.SysFont("Arial", 20)
+				i = 0
+				for dude in self.creatures:
+					mage = thefont.render("%s - %.2f" % (dude.id, dude.fitness), False, (255,255,255))
+					screen.blit(mage, (width-120, 40*i+40))
+					i+=1
+
+				# show time
+				mage = thefont.render("%.1f" % (20-self.play_time/1000.), False, (255,255,255))
+				pygame.draw.rect(screen, (240,100,100), (0,0,width-(width*self.play_time/20000.), 10)  )
+				screen.blit(mage, (20,20))
+
 
 			self.creatures.sort(key=lambda x: x.fitness, reverse=True)
 
-
-			# show fitness of creatures
-			thefont = pygame.font.SysFont("Arial", 20)
-			i = 0
-			for dude in self.creatures:
-				mage = thefont.render("%s - %.2f" % (dude.id, dude.fitness), False, (255,255,255))
-				screen.blit(mage, (width-120, 40*i+40))
-				i+=1
-
-			# show time
-			mage = thefont.render("%.1f" % (20-self.play_time/1000.), False, (255,255,255))
-			pygame.draw.rect(screen, (240,100,100), (0,0,width-(width*self.play_time/20000.), 10)  )
-			screen.blit(mage, (20,20))
-
 			# parent selection
 			if self.play_time/1000. >= 20:
-				#fitnesses = np.array([dude.fitness for dude in self.creatures])
-				# convert fitnesses into probabilities
-				#_weights = (fitnesses - min(fitnesses)) / sum(fitnesses - min(fitnesses))
-				#parents = np.random.choice(self.creatures, size=3, p=_weights, replace=False)
-				#print parents
-				#done = True
-				pass
-
+				self.new_generation()
+				self.play_time = 0
+				self.play_start = pygame.time.get_ticks()
+				self.player.reset()
 
 
 			pygame.display.update()
