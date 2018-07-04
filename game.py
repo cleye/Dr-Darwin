@@ -37,6 +37,7 @@ background
 
 MUTANT_SPRITE = "resources/mutant.bmp"
 PLAYER_SPRITE = "resources/player.bmp"
+GAME_SONG = "resources/abnormal.ogg"
 
 '''class Renderer:
 	def __init__(self):
@@ -188,6 +189,7 @@ class Creature:
 		self.fitness_rewards = 0
 		self.fitness_punish = 0
 		self.avg_distance2player = 0
+		self.frame_since_last_attack = 0
 
 
 		self.distance2player = 9999
@@ -315,9 +317,12 @@ class Creature:
 		screen.blit(font.render(str(self.id), True, (255,255,255)), (self.x-5, self.y-8))
 
 		does_damage_to_player = 0
-		if self.distance2player < 24:
-			p.health -= 0.5
-			does_damage_to_player = 1
+		if self.distance2player < 26:
+			# cant do damage with one touch
+			if frame - self.frame_since_last_attack > 20:
+				self.frame_since_last_attack = frame
+				p.health -= 4
+				does_damage_to_player = 1
 
 		if self.health < 0:
 			self.die()
@@ -361,22 +366,23 @@ class Creature:
 
 		# detects if stationary
 		stationary = 0
-		if output_velocity < 0.04:
+		if output_velocity < 0.1:
 			stationary = 1
 
 
 		self.fitness = ( (dist((0,0), (width, height)) - self.avg_distance2player) / 100. )**2
 		''' rewards:
 		damage done on player
+		velocity
 		average distance to player
 		time with player in sight
 		--ability to sense bullets and dodge them--
 		'''
-		self.fitness_rewards += does_damage_to_player*50 + left_sensor_detect/200. + right_sensor_detect/200.
+		self.fitness_rewards += does_damage_to_player*40 + left_sensor_detect/200. + right_sensor_detect/200. + output_velocity/40.
 
 		''' punishes:
 		being stationary
-		--running into walls--
+		running into walls
 		hitting bullets
 		'''
 		self.fitness_punish += stationary/10. + hit_by_bullet*10 + hit_wall*10
@@ -389,7 +395,6 @@ class Creature:
 	def make_decision(self, inputs, T1, T2):
 
 		# LAYER 1 (input layer)		
-		# Add bias units 
 		#print inputs		
 
 		# LAYER 2 (hidden layer)			
@@ -411,16 +416,17 @@ class Creature:
 		return a3
 
 	def die(self):
+		# TODO add animation
 		self.alive = False
 
-	def mutated_child(self, mutability=0.2):
+	def mutated_child(self, _id, mutability=0.07):
 		# new theta values (chromosomes) come from multiplying current theta values by random amount
 		T1 = self.T1 * (1 + np.random.random((self.s[2], self.s[1]+1))*mutability)
 		T2 = self.T2 * (1 + np.random.random((self.s[3], self.s[2]+1))*mutability)
 
-		return Creature(self.id, T1, T2)
+		return Creature(_id, T1, T2)
 
-class Level:
+'''class Level:
 	def __init__(self, matrix):
 		self.colours = matrix[2]
 		self.map = matrix[3:]
@@ -434,7 +440,7 @@ class Level:
 			for j in range(self.w-1):
 				if self.map[i][j] == "#":
 					pygame.draw.rect(screen, (200,200,200), (j*width/self.w, i*height/self.h, width/self.w, height/self.h))
-
+'''
 
 class Game:
 	STATE_MAIN_MENU = 0
@@ -450,7 +456,6 @@ class Game:
 		self.key_down = False
 		self.key_space = False
 
-		self.level = Level(LEVEL)
 		self.player = Player()
 
 		# time that gameplay started
@@ -465,12 +470,12 @@ class Game:
 			self.state = Game.STATE_GAMEPLAY
 			self.new_generation()
 			self.play_start = pygame.time.get_ticks()
+			pygame.mixer.music.play(-1)
 		self.play_button.mouse_up = play_action
 
 		
 
-	def new_generation(self, population=10):
-
+	def new_generation(self, population=20):
 		# if first generation create new creatures
 		if self.generation == 0:
 			for i in range(population):
@@ -484,7 +489,11 @@ class Game:
 			_weights = (fitnesses - min(fitnesses)) / sum(fitnesses - min(fitnesses))
 			# choose half of generation to survive and mutate
 			parents = np.random.choice(self.creatures, size=population/2, p=_weights, replace=False)
-			offspring = [parent.mutated_child() for parent in parents]
+			# creates offspring
+			offspring = []
+			for _id, parent in enumerate(parents):
+				offspring.append(parent.mutated_child(_id))
+
 			# sets first half of creature generation as offspring
 			self.creatures = offspring
 			# sets second half of creature generation as random
@@ -498,6 +507,8 @@ class Game:
 		global frame_time, frame
 
 		last_frame_time = 0
+
+		pygame.mixer.music.load(GAME_SONG)
 
 		done = False
 		while not done:
@@ -600,7 +611,6 @@ class Game:
 
 game = Game()
 game.run()
-l = Level(LEVEL)
 
 
 pygame.quit()
