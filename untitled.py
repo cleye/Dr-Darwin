@@ -511,110 +511,41 @@ class Creature:
 
 class Scene:
 	def __init__(self):
-		# since scene began
-		self.start = 0
-		self.frame = 0
-		self.time = 0
+		pass
 
 	def update(self):
-		self.time = pygame.time.get_ticks() - self.start
-		self.frame += 1
-		self.render()
+		pass
 
 	def render(self):
 		pass
 
 class MainMenuScene(Scene):
 	def __init__(self):
-		Scene.__init__(self)
+		super(self).__init__()
 
-		self.play_button = Button("Play", (40, 160))
+	def render(self):
+		play_button = Button("Play", (40, 160))
+
+		header_font = pygame.font.SysFont("Corbel", 50)
+		header_image = header_font.render("Darwin", False, (255,255,255))
+
+		screen.blit(header_image, (40, 40))
+
+		play_button.add(screen)
+		
 		def play_action():
 			game.new_generation()
 			game.play_start = pygame.time.get_ticks()
 			pygame.mixer.music.play(-1)
-			game.scene = Game.GAMEPLAY
-		self.play_button.mouse_up = play_action
-		
-		self.header_font = pygame.font.SysFont("Corbel", 50)
-		
-		header_image = self.header_font.render("Darwin", False, (255,255,255))
+			game.scene = Game.MAIN_MENU
 
-		screen.blit(header_image, (40, 40))
-
-	def render(self):
-		self.play_button.add(screen)
-		
-
-		
-
-
-
-class GamePlayScene(Scene):
-	def __init__(self):
-		Scene.__init__(self)
-
-	def render(self):
-		screen.fill((0,0,0))
-
-		# use [creatures.display for creature ni asdhfasg]
-		for creature in game.creatures:
-			if creature.alive:
-				creature.display()
-		
-		game.player.display()
-
-		if game.key_right:
-			game.player.direction -= 3
-		if game.key_left:
-			game.player.direction += 3
-
-		if game.key_up:
-			game.player.vel = game.player.max_vel
-		else:
-			game.player.vel = 0
-
-
-		# show fitness of creatures
-		thefont = pygame.font.SysFont("Arial", 20)
-		'''i = 0
-		for dude in self.creatures:
-			mage = thefont.render("%s - %.2f" % (dude.id, dude.fitness), False, (255,255,255))
-			screen.blit(mage, (width-120, 40*i+40))
-			i+=1'''
-
-		# show time
-		pygame.draw.rect(screen, (240,100,100), (0,0,width-(width*self.time/20000.), 10)  )
-		'''mage = thefont.render("%.1f" % (20-self.play_time/1000.), False, (255,255,255))
-		screen.blit(mage, (width/2,4))'''
-
-		# show generation
-		mage = thefont.render("Generation %s" % (game.generation), False, (255,255,255))
-		screen.blit(mage, (width/2-mage.get_rect().width/2, 1))
-
-class GameIntroScene(Scene):
-	def __init__(self):
-		Scene.__init__(self)
-
-	def render(self):
-		screen.fill((0,0,0))
-		creature_init_pos = [ (creature.x, creature.y) for creature in self.creatures ]
-		for creature in game.creatures:
-			creature.x = darwin.x
-			creature.y = darwin.y
-
-		mage = thefont.render("Generation %s" % (game.generation), False, (255,255,255))
-		screen.blit(mage, (width/2-mage.get_rect().width/2, 1))
-
-		# add creature animation
-		if(self.time < 1000):
-			pass#self.time/1000.
+		play_button.mouse_up = play_action
 
 
 class Game:
 	MAIN_MENU = MainMenuScene()
 	GAMEPLAY = GamePlayScene()
-	GAMEINTRO = GameIntroScene()
+	STATE_GAMEINTRO = 2
 
 	def __init__(self):
 
@@ -655,7 +586,6 @@ class Game:
 			fitnesses = np.array([dude.fitness for dude in self.creatures])
 			# convert fitnesses into weighted probabilities
 			_weights = (fitnesses - min(fitnesses)) / sum(fitnesses - min(fitnesses))
-			print _weights
 			# choose half of generation to survive and mutate
 			parents = np.random.choice(self.creatures, size=population/2, p=_weights, replace=False)
 			# creates offspring
@@ -712,8 +642,60 @@ class Game:
 					if event.key == K_SPACE:
 						self.key_down = False
 
-			self.scene.update()
 			self.scene.render()
+
+			if self.state == Game.STATE_GAMEINTRO:
+				screen.fill((0,0,0))
+				creature_init_pos = [ (creature.x, creature.y) for creature in self.creatures ]
+				for creature in self.creatures:
+					creature.x = darwin.x
+					creature.y = darwin.y
+				if self.gameplay_time
+
+
+			if self.state == Game.STATE_GAMEPLAY:
+				screen.fill((0,0,0))
+
+				for dude in self.creatures:
+					if dude.alive:
+						dude.display()
+					else:
+						pass
+				
+				self.player.display()
+				#self.level.display()
+
+
+				if self.key_right:
+					self.player.direction -= 3
+				if self.key_left:
+					self.player.direction += 3
+
+				if self.key_up:
+					self.player.vel = self.player.max_vel
+				else:
+					self.player.vel = 0
+
+
+				self.play_time = pygame.time.get_ticks() - self.play_start
+				self.play_frame += 1
+
+				# show fitness of creatures
+				thefont = pygame.font.SysFont("Arial", 20)
+				'''i = 0
+				for dude in self.creatures:
+					mage = thefont.render("%s - %.2f" % (dude.id, dude.fitness), False, (255,255,255))
+					screen.blit(mage, (width-120, 40*i+40))
+					i+=1'''
+
+				# show time
+				pygame.draw.rect(screen, (240,100,100), (0,0,width-(width*self.play_time/20000.), 10)  )
+				'''mage = thefont.render("%.1f" % (20-self.play_time/1000.), False, (255,255,255))
+				screen.blit(mage, (width/2,4))'''
+
+				# show generation
+				mage = thefont.render("Generation %s" % (self.generation), False, (255,255,255))
+				screen.blit(mage, (width/2-mage.get_rect().width/2, 1))
 
 
 			self.creatures.sort(key=lambda x: x.fitness, reverse=True)
