@@ -43,6 +43,9 @@ DARWIN_DROP_IMAGE = ["resources/darwin_dropping1.bmp", "resources/darwin_droppin
 
 GAMEPLAY_SONG = "resources/abnormal.ogg"
 
+HEADER_FONT = pygame.font.SysFont("Corbel", 50)
+NORMAL_FONT = pygame.font.SysFont("Arial", 20)
+
 '''class Renderer:
 	def __init__(self):
 		pass
@@ -73,6 +76,7 @@ def angle_between(a, b):
 
 		  135			   45
 	 	  b *			  * b 
+
 
 				  * a     * b 0
 
@@ -136,17 +140,20 @@ def g(z):
 class Darwin:
 	def __init__(self):
 
-		self.original_image = pygame.image.load(DARWIN_IMAGE).convert_alpha()
-		self.image = self.original_image
+		self.image = pygame.image.load(DARWIN_IMAGE).convert_alpha()
 		self.rect = self.image.get_rect()
 
-		self.x = width/2 - self.rect.width/2
-		self.y = 100
+		# centre of image
+		self.x = width/2
+		self.y = 40
 		self.vel = 0
 
 
-	def display(self):
-		screen.blit(self.image, self.rect)
+	def display(self, hover_timer=None):
+		if hover_timer is not None:
+			self.y = 40 + 10*sin(hover_timer/100.)
+		screen.blit(self.image, (self.x - self.rect.width/2, self.y - self.rect.height/2))
+
 
 
 class Player:
@@ -197,9 +204,9 @@ class Player:
 
 
 	def shoot(self):
-		if pygame.time.get_ticks() - self.shot_last_bullet > 400:
+		if pygame.time.get_ticks() - self.shot_last_bullet > 500:
 			self.bullets.append(Bullet( self.x+12*sin(self.direction), self.y+12*cos(self.direction), self.direction%360))
-			self.health -= 3
+			self.health -= 4
 			self.shot_last_bullet = pygame.time.get_ticks()
 
 	def reset(self):
@@ -240,15 +247,25 @@ class Creature:
 		self.rotation_vel = 6
 
 		self.id = _id
-		self.periphery = 108 # degree of vision
+		# degree of vision
+		self.periphery = 108 
 		self.health = 100
 		self.alive = True
+		# if in process of dying
+		self.dying = False
+		# time that dying animation started
+		self.dying_start = 0
 
 		self.fitness = 0
 		self.fitness_rewards = 0
 		self.fitness_punish = 0
 		self.avg_distance2player = 0
 		self.frame_since_last_attack = 0
+
+		self.left_sensor_detect = 0		
+		self.right_sensor_detect = 0	
+		self.left_sensor_detect_bullet = 0
+		self.right_sensor_detect_bullet = 0
 
 
 		self.distance2player = 9999
@@ -277,25 +294,69 @@ class Creature:
 		else:
 			self.T2 = T2
 
-
 	def display(self):
-		# parameters
-		left_sensor_detect = 0
-		right_sensor_detect = 0
-		left_sensor_detect_bullet = 0
-		right_sensor_detect_bullet = 0
-		wall_proximity_ = 0
-
-		p = game.player
-
-
-
 		#screen.blit(self.image, self.rect)
-		pygame.draw.ellipse(screen, (251,121,0), (self.x-16, self.y-16, 32, 32) ) #self.rect)
 
+		# positions of left and right sensors
 		left_sensor_pos = (self.x + cos(self.direction-45)*10, self.y + sin(self.direction+45+90)*10) 
 		right_sensor_pos = (self.x + cos(self.direction-45-90)*10, self.y + sin(self.direction+45)*10)
 
+		# creature radius
+		r = 32
+		if self.dying:
+			# dying_time starts at 1000 and goes down to 0
+			dying_time = 1000 - (pygame.time.get_ticks() - self.dying_start)
+			if dying_time > 0:
+				r = dying_time * 32/1000
+			else:
+				self.dying = False
+
+		# draws body
+		pygame.draw.ellipse(screen, (251,121,0), (self.x-r/2, self.y-r/2, r, r) )
+
+		if self.alive:
+			# draws eyes
+			pygame.draw.ellipse(screen, (20,130,220), (left_sensor_pos[0]-8, left_sensor_pos[1]-8, 16, 16))
+			pygame.draw.ellipse(screen, (20,130,220), (right_sensor_pos[0]-8, right_sensor_pos[1]-8, 16, 16))
+
+			# draws bullet sensors
+			if self.left_sensor_detect_bullet:
+				pygame.draw.ellipse(screen, (230,130,130), (left_sensor_pos[0]-6, left_sensor_pos[1]-6, 12, 12))
+			if self.right_sensor_detect_bullet:
+				pygame.draw.ellipse(screen, (230,130,130), (right_sensor_pos[0]-6, right_sensor_pos[1]-6, 12, 12))
+			# draws player sensors
+			if self.left_sensor_detect:
+				pygame.draw.ellipse(screen, (100,230,20), (left_sensor_pos[0]-4, left_sensor_pos[1]-4, 8, 8))
+			if self.right_sensor_detect:
+				pygame.draw.ellipse(screen, (100,230,20), (right_sensor_pos[0]-4, right_sensor_pos[1]-4, 8, 8))
+
+
+			# draw health bar
+			#pygame.draw.rect(screen, (215,30,70), (self.x-30, self.y-20, 60, 6))
+			pygame.draw.rect(screen, (60,190,100), (self.x-30, self.y-20, self.health*60/100, 6), 0)
+			pygame.draw.rect(screen, (255,255,255), (self.x-30, self.y-20, 60, 6), 1)
+			
+
+		# draw sensors to player
+		#pygame.draw.polygon(screen, (100,2,2),   ( (left_sensor_pos[0] + cos(-self.periphery+90-self.direction)*20, left_sensor_pos[1] + sin(-self.periphery+90-self.direction)*20), left_sensor_pos, (left_sensor_pos[0] + cos(self.periphery-self.direction)*20, left_sensor_pos[1] + sin(self.periphery-self.direction)*20)), 0 if left_sensor_detect else 2  ) 
+		#pygame.draw.polygon(screen, (100,2,2),   ( (right_sensor_pos[0] + cos(self.periphery+90-self.direction)*20, right_sensor_pos[1] + sin(self.periphery+90-self.direction)*20), right_sensor_pos, (right_sensor_pos[0] + cos(180-self.periphery-self.direction)*20, right_sensor_pos[1] + sin(180-self.periphery-self.direction)*20)), 0 if right_sensor_detect else 2  ) 
+
+		# draw sensors to bullets
+		#pygame.draw.polygon(screen, (2,180,2),   ( (left_sensor_pos[0] + cos(-self.periphery+90-self.direction)*20, left_sensor_pos[1] + sin(-self.periphery+90-self.direction)*20), left_sensor_pos, (left_sensor_pos[0] + cos(self.periphery-self.direction)*20, left_sensor_pos[1] + sin(self.periphery-self.direction)*20)), 0 if left_sensor_detect_bullet else 2  ) 
+		#pygame.draw.polygon(screen, (2,180,2),   ( (right_sensor_pos[0] + cos(self.periphery+90-self.direction)*20, right_sensor_pos[1] + sin(self.periphery+90-self.direction)*20), right_sensor_pos, (right_sensor_pos[0] + cos(180-self.periphery-self.direction)*20, right_sensor_pos[1] + sin(180-self.periphery-self.direction)*20)), 0 if right_sensor_detect_bullet else 2  ) 
+		
+		#pygame.draw.line(screen, (2,100,2),   ( p.x , p.y ),  ( self.x, self.y), 2  ) 
+
+
+	def update(self):
+		# parameters
+		self.left_sensor_detect = 0
+		self.right_sensor_detect = 0
+		self.left_sensor_detect_bullet = 0
+		self.right_sensor_detect_bullet = 0
+		wall_proximity_ = 0
+
+		p = game.player
 
 		#angle = atan2( (self.x - p.x), (self.y - p.y) )+180
 		angle = angle_between((self.x, self.y), (p.x, p.y))
@@ -303,19 +364,19 @@ class Creature:
 
 		# check sensor detects player
 		if 360-self.periphery+90 < (-angle + self.direction)%360 or (-angle + self.direction)%360 < self.periphery:
-			left_sensor_detect = 1
+			self.left_sensor_detect = 1
 		else:
-			left_sensor_detect = 0
+			self.left_sensor_detect = 0
 
 
 		if self.periphery+90 > (-angle + self.direction)%360 > 180-self.periphery :
-			right_sensor_detect = 1
+			self.right_sensor_detect = 1
 		else:
-			right_sensor_detect = 0
+			self.right_sensor_detect = 0
 
 		# check sensor detects bullets
-		left_sensor_detect_bullet = 0
-		right_sensor_detect_bullet = 0
+		self.left_sensor_detect_bullet = 0
+		self.right_sensor_detect_bullet = 0
 		hit_by_bullet = 0
 		for b in p.bullets:
 			angle = angle_between( (self.x, self.y), (b.x, b.y) )
@@ -323,18 +384,18 @@ class Creature:
 			# if bullet is moving in direction of creature
 			if -45 > p.direction - angle > -135:
 				if 360-self.periphery+90 < (-angle + self.direction)%360 or (-angle + self.direction)%360 < self.periphery:
-					left_sensor_detect_bullet = 1
+					self.left_sensor_detect_bullet = 1
 				else:
-					left_sensor_detect_bullet = 0
+					self.left_sensor_detect_bullet = 0
 
 
 				if self.periphery+90 > (-angle + self.direction)%360 > 180-self.periphery :
-					right_sensor_detect_bullet = 1
+					self.right_sensor_detect_bullet = 1
 				else:
-					right_sensor_detect_bullet = 0
+					self.right_sensor_detect_bullet = 0
 
 			if dist((b.x, b.y), (self.x, self.y)) < 20:
-				self.health -= randint(20,50)
+				self.health -= randint(30,75)
 				hit_by_bullet = 1
 				p.bullets.remove(b)
 
@@ -342,38 +403,9 @@ class Creature:
 		wall_proximity_ = wall_proximity(self.x, self.y)
 
 
-
-		# draw sensors to player
-		#pygame.draw.polygon(screen, (100,2,2),   ( (left_sensor_pos[0] + cos(-self.periphery+90-self.direction)*20, left_sensor_pos[1] + sin(-self.periphery+90-self.direction)*20), left_sensor_pos, (left_sensor_pos[0] + cos(self.periphery-self.direction)*20, left_sensor_pos[1] + sin(self.periphery-self.direction)*20)), 0 if left_sensor_detect else 2  ) 
-		#pygame.draw.polygon(screen, (100,2,2),   ( (right_sensor_pos[0] + cos(self.periphery+90-self.direction)*20, right_sensor_pos[1] + sin(self.periphery+90-self.direction)*20), right_sensor_pos, (right_sensor_pos[0] + cos(180-self.periphery-self.direction)*20, right_sensor_pos[1] + sin(180-self.periphery-self.direction)*20)), 0 if right_sensor_detect else 2  ) 
-
-		pygame.draw.ellipse(screen, (20,130,220), (left_sensor_pos[0]-8, left_sensor_pos[1]-8, 16, 16))
-		pygame.draw.ellipse(screen, (20,130,220), (right_sensor_pos[0]-8, right_sensor_pos[1]-8, 16, 16))
-
-		if left_sensor_detect_bullet:
-			pygame.draw.ellipse(screen, (230,130,130), (left_sensor_pos[0]-6, left_sensor_pos[1]-6, 12, 12))
-		if right_sensor_detect_bullet:
-			pygame.draw.ellipse(screen, (230,130,130), (right_sensor_pos[0]-6, right_sensor_pos[1]-6, 12, 12))
-		
-		if left_sensor_detect:
-			pygame.draw.ellipse(screen, (100,230,20), (left_sensor_pos[0]-4, left_sensor_pos[1]-4, 8, 8))
-		if right_sensor_detect:
-			pygame.draw.ellipse(screen, (100,230,20), (right_sensor_pos[0]-4, right_sensor_pos[1]-4, 8, 8))
-
-		# draw sensors to bullets
-		#pygame.draw.polygon(screen, (2,180,2),   ( (left_sensor_pos[0] + cos(-self.periphery+90-self.direction)*20, left_sensor_pos[1] + sin(-self.periphery+90-self.direction)*20), left_sensor_pos, (left_sensor_pos[0] + cos(self.periphery-self.direction)*20, left_sensor_pos[1] + sin(self.periphery-self.direction)*20)), 0 if left_sensor_detect_bullet else 2  ) 
-		#pygame.draw.polygon(screen, (2,180,2),   ( (right_sensor_pos[0] + cos(self.periphery+90-self.direction)*20, right_sensor_pos[1] + sin(self.periphery+90-self.direction)*20), right_sensor_pos, (right_sensor_pos[0] + cos(180-self.periphery-self.direction)*20, right_sensor_pos[1] + sin(180-self.periphery-self.direction)*20)), 0 if right_sensor_detect_bullet else 2  ) 
-		
-
-		# draw health
-		#pygame.draw.rect(screen, (255,100,70), (self.x-30, self.y-20, 60, 6))
-		pygame.draw.rect(screen, (60,190,100), (self.x-30, self.y-20, self.health*60/100, 6), 0)
-		pygame.draw.rect(screen, (255,255,255), (self.x-30, self.y-20, 60, 6), 1)
-
-		#pygame.draw.line(screen, (2,100,2),   ( p.x , p.y ),  ( self.x, self.y), 2  ) 
 		
 		# draw id
-		font = pygame.font.SysFont("Corbel", 20)
+		#font = pygame.font.SysFont("Corbel", 20)
 		#screen.blit(font.render(str(self.id), True, (255,255,255)), (self.x-5, self.y-8))
 
 		does_damage_to_player = 0
@@ -394,7 +426,7 @@ class Creature:
 		#move direction
 
 		# inputs to NN including bias unit
-		inupts = np.array((1, left_sensor_detect, right_sensor_detect, self.distance2player / dist((0,0), (width, height)), left_sensor_detect_bullet, right_sensor_detect_bullet, wall_proximity_ ) )
+		inupts = np.array((1, self.left_sensor_detect, self.right_sensor_detect, self.distance2player / dist((0,0), (width, height)), self.left_sensor_detect_bullet, self.right_sensor_detect_bullet, wall_proximity_ ) )
 
 		[output_direction, output_velocity] = self.make_decision(inupts, self.T1, self.T2)  #randint(-200,100)/100.
 
@@ -422,10 +454,12 @@ class Creature:
 		# calculate average distance to player
 		# could use timestep to do this
 		self.distance2player = dist((self.x, self.y), (p.x, p.y))
-		if game.play_time == 0:
+
+		# could also use game.GAMEPLAY.time
+		if game.scene.time == 0:
 			self.avg_distance2player = self.distance2player
 		else:
-			self.avg_distance2player = (self.distance2player + self.avg_distance2player*(game.play_frame-1) ) / (game.play_frame)
+			self.avg_distance2player = (self.distance2player + self.avg_distance2player*(game.scene.time-1) ) / (game.scene.time)
 
 		# detects if stationary
 		stationary = 0
@@ -440,9 +474,9 @@ class Creature:
 		# damage done on player
 		self.fitness_rewards += does_damage_to_player*40 
 		# time with player in sight
-		self.fitness_rewards += left_sensor_detect/200. + right_sensor_detect/200.
+		self.fitness_rewards += self.left_sensor_detect/200. + self.right_sensor_detect/200.
 		# time with player in both sensors
-		self.fitness_rewards += 0.1 if (left_sensor_detect and right_sensor_detect) else 0
+		self.fitness_rewards += 0.1 if (self.left_sensor_detect and self.right_sensor_detect) else 0
 		# veloctiy
 		self.fitness_rewards += output_velocity/40.
 
@@ -485,6 +519,8 @@ class Creature:
 	def die(self):
 		# TODO add animation
 		self.alive = False
+		self.dying = True
+		self.dying_start = pygame.time.get_ticks()
 
 	def mutated_child(self, _id, mutability=0.07):
 		# new theta values (chromosomes) come from multiplying current theta values by random amount
@@ -519,10 +555,20 @@ class Scene:
 	def update(self):
 		self.time = pygame.time.get_ticks() - self.start
 		self.frame += 1
-		self.render()
 
 	def render(self):
 		pass
+
+	def begin(self):
+		pass
+
+	def go_to(self, new_scene):
+		game.scene = new_scene
+		# time when scene began
+		new_scene.start = pygame.time.get_ticks()
+		new_scene.frame = 0
+		new_scene.time = 0
+		new_scene.begin()
 
 class MainMenuScene(Scene):
 	def __init__(self):
@@ -531,35 +577,40 @@ class MainMenuScene(Scene):
 		self.play_button = Button("Play", (40, 160))
 		def play_action():
 			game.new_generation()
-			game.play_start = pygame.time.get_ticks()
-			pygame.mixer.music.play(-1)
-			game.scene = Game.GAMEPLAY
+			self.go_to(game.GAMEINTRO)
 		self.play_button.mouse_up = play_action
-		
-		self.header_font = pygame.font.SysFont("Corbel", 50)
-		
-		header_image = self.header_font.render("Darwin", False, (255,255,255))
 
-		screen.blit(header_image, (40, 40))
+		# how to play button
+		self.htp_button = Button("How to play", (40, 260))
+		def htp_action():
+			self.go_to(game.HOW_TO_PLAY)
+		self.htp_button.mouse_up = htp_action
+		
+		self.header_image = HEADER_FONT.render("Darwin", False, (255,255,255))
 
 	def render(self):
+		screen.fill((0,0,0))
 		self.play_button.add(screen)
-		
-
-		
-
-
+		self.htp_button.add(screen)
+		screen.blit(self.header_image, (40, 40))
 
 class GamePlayScene(Scene):
 	def __init__(self):
 		Scene.__init__(self)
 
+	def begin(self):
+		pygame.mixer.music.load(GAMEPLAY_SONG)
+		pygame.mixer.music.play(-1)
+
 	def render(self):
 		screen.fill((0,0,0))
 
-		# use [creatures.display for creature ni asdhfasg]
 		for creature in game.creatures:
+			# only update if alive
 			if creature.alive:
+				creature.update()
+			# display when alive or dying
+			if creature.alive or creature.dying:
 				creature.display()
 		
 		game.player.display()
@@ -576,10 +627,9 @@ class GamePlayScene(Scene):
 
 
 		# show fitness of creatures
-		thefont = pygame.font.SysFont("Arial", 20)
 		'''i = 0
 		for dude in self.creatures:
-			mage = thefont.render("%s - %.2f" % (dude.id, dude.fitness), False, (255,255,255))
+			mage = NORMAL_FONT.render("%s - %.2f" % (dude.id, dude.fitness), False, (255,255,255))
 			screen.blit(mage, (width-120, 40*i+40))
 			i+=1'''
 
@@ -589,32 +639,85 @@ class GamePlayScene(Scene):
 		screen.blit(mage, (width/2,4))'''
 
 		# show generation
-		mage = thefont.render("Generation %s" % (game.generation), False, (255,255,255))
+		mage = NORMAL_FONT.render("Generation %s" % (game.generation), False, (255,255,255))
 		screen.blit(mage, (width/2-mage.get_rect().width/2, 1))
 
+
+		game.creatures.sort(key=lambda x: x.fitness, reverse=True)
+
+		# parent selection
+		if self.time/1000. >= 20:
+			game.new_generation()
+			self.time = 0
+			self.start = pygame.time.get_ticks()
+			self.frame = 0
+			game.player.reset()
+
+
 class GameIntroScene(Scene):
+	''' Parts of this scene:
+	1. Darwin appears, is hovering, "Skip intro" button at bottom right (go to part 4), "Press space to continue"
+	2. "Evil Dr Darwin is trying to breed the ultimate killing creature"
+	2. "Every generation the best killer creatures survive"
+	3. "Kill the creatures by leading them into walls or shooting them"
+	4. Creatures move directly down from Darwin, Darwin dropping sprite
+	5. Creatures move to their positions
+	6. 
+	'''
 	def __init__(self):
 		Scene.__init__(self)
+		self.creature_init_pos = None
+		self.darwin = Darwin()
+		self.part = 1
+		# time since part started
+		self.part_start = 0
+
+	def begin(self):
+		self.creature_init_pos = [ (creature.x, creature.y) for creature in game.creatures ]
+		self.part_start = pygame.time.get_ticks()
 
 	def render(self):
 		screen.fill((0,0,0))
-		creature_init_pos = [ (creature.x, creature.y) for creature in self.creatures ]
-		for creature in game.creatures:
-			creature.x = darwin.x
-			creature.y = darwin.y
+		if self.part == 1:
 
-		mage = thefont.render("Generation %s" % (game.generation), False, (255,255,255))
-		screen.blit(mage, (width/2-mage.get_rect().width/2, 1))
+			self.darwin.display(hover_timer=self.part_start)
 
-		# add creature animation
-		if(self.time < 1000):
-			pass#self.time/1000.
+			for creature in game.creatures:
+				creature.display()
 
+		# creature animation
+		if self.part == 5:
+			duration = 1200
+			# move from darwin to positions
+			for index, creature in enumerate(game.creatures):
+				creature.x = self.creature_init_pos[index][0] + (self.darwin.x - self.creature_init_pos[index][0]) * (pygame.time.get_ticks() - self.part_start) / duratiom
+				creature.y = self.creature_init_pos[index][1] + (self.darwin.y + 60 - self.creature_init_pos[index][1]) * (pygame.time.get_ticks() - self.part_start) / duration
+			if pygame.time.get_ticks() - self.part_start == duration:
+				self.part += 1
+		if self.part == 6:
+			self.go_to(game.GAMEPLAY)
+
+class HowToPlayScene(Scene):
+	def __init__(self):
+		Scene.__init__(self)
+		self.back_button = Button("Back", (40, height-60))
+		def back_action():
+			self.go_to(game.MAIN_MENU)
+		self.back_button.mouse_up = back_action
+
+	def render(self):
+		screen.fill((0,0,0))
+
+		self.back_button.add(screen)
+
+		header_image = HEADER_FONT.render("Darwin", False, (255,255,255))
+		screen.blit(header_image, (40, 40))
 
 class Game:
 	MAIN_MENU = MainMenuScene()
 	GAMEPLAY = GamePlayScene()
 	GAMEINTRO = GameIntroScene()
+	HOW_TO_PLAY = HowToPlayScene()
 
 	def __init__(self):
 
@@ -627,14 +730,6 @@ class Game:
 		self.key_space = False
 
 		self.player = Player()
-
-		# time that intro started
-		self.intro_start = 0
-
-		# time that gameplay started
-		self.play_start = 0
-		self.play_time = 0
-		self.play_frame = 0
 
 		self.creatures = []
 		self.generation = 0
@@ -655,7 +750,6 @@ class Game:
 			fitnesses = np.array([dude.fitness for dude in self.creatures])
 			# convert fitnesses into weighted probabilities
 			_weights = (fitnesses - min(fitnesses)) / sum(fitnesses - min(fitnesses))
-			print _weights
 			# choose half of generation to survive and mutate
 			parents = np.random.choice(self.creatures, size=population/2, p=_weights, replace=False)
 			# creates offspring
@@ -672,13 +766,9 @@ class Game:
 
 		self.generation += 1
 
+
 	def run(self):
-		global frame_time, frame
-
-		last_frame_time = 0
-
-		pygame.mixer.music.load(GAMEPLAY_SONG)
-		darwin = Darwin()
+		global frame
 
 		done = False
 		while not done:
@@ -714,25 +804,10 @@ class Game:
 
 			self.scene.update()
 			self.scene.render()
-
-
-			self.creatures.sort(key=lambda x: x.fitness, reverse=True)
-
-			# parent selection
-			if self.play_time/1000. >= 20:
-				self.new_generation()
-				self.play_time = 0
-				self.play_start = pygame.time.get_ticks()
-				self.play_frame = 0
-				self.player.reset()
-
-			darwin.display()
-
+			# why is all time scenes updating??
 
 			pygame.display.update()
 
-			frame_time = pygame.time.get_ticks() - last_frame_time
-			last_frame_time = pygame.time.get_ticks()
 			frame += 1
 
 
