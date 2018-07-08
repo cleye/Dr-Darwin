@@ -44,7 +44,7 @@ DARWIN_DROP_IMAGE = ["resources/darwin_dropping1.bmp", "resources/darwin_droppin
 GAMEPLAY_SONG = "resources/abnormal.ogg"
 
 HEADER_FONT = pygame.font.SysFont("Corbel", 50)
-NORMAL_FONT = pygame.font.SysFont("Arial", 20)
+NORMAL_FONT = pygame.font.SysFont("Consolas", 20)
 
 '''class Renderer:
 	def __init__(self):
@@ -145,13 +145,13 @@ class Darwin:
 
 		# centre of image
 		self.x = width/2
-		self.y = 40
+		self.y = 50
 		self.vel = 0
 
 
-	def display(self, hover_timer=None):
-		if hover_timer is not None:
-			self.y = 40 + 10*sin(hover_timer/100.)
+	def display(self, hover=False):
+		if hover:
+			self.y = 50 + 5.0*sin(pygame.time.get_ticks()/2.4)
 		screen.blit(self.image, (self.x - self.rect.width/2, self.y - self.rect.height/2))
 
 
@@ -174,7 +174,7 @@ class Player:
 		self.vel = 0
 		self.direction = 180
 
-	def display(self):
+	def display(self, intro_mode=False):
 
 		# move
 		self.x += self.vel * sin(self.direction)
@@ -192,8 +192,9 @@ class Player:
 		#pygame.draw.line(screen, (2,100,2),   ( self.x , self.y ),  ( self.x+40*sin(self.direction), self.y+40*cos(self.direction)), 2  ) 
 
 		# draw health bar
-		pygame.draw.rect(screen, (60,190,100), (self.x-30, self.y-20, self.health*60/100, 6), 0)
-		pygame.draw.rect(screen, (255,255,255), (self.x-30, self.y-20, 60, 6), 1)
+		if not intro_mode:
+			pygame.draw.rect(screen, (60,190,100), (self.x-30, self.y-20, self.health*60/100, 6), 0)
+			pygame.draw.rect(screen, (255,255,255), (self.x-30, self.y-20, 60, 6), 1)
 
 		# TODO cant hit wall
 
@@ -206,7 +207,7 @@ class Player:
 	def shoot(self):
 		if pygame.time.get_ticks() - self.shot_last_bullet > 500:
 			self.bullets.append(Bullet( self.x+12*sin(self.direction), self.y+12*cos(self.direction), self.direction%360))
-			self.health -= 4
+			self.health -= 5
 			self.shot_last_bullet = pygame.time.get_ticks()
 
 	def reset(self):
@@ -240,8 +241,8 @@ class Creature:
 		self.og_image = pygame.image.load(MUTANT_IMAGE).convert_alpha()
 		self.image = self.og_image
 		self.rect = self.image.get_rect()
-		self.x = randint(40,width-40)     #width/2#randint(20,width-20)
-		self.y = randint(80,140)   #20#height/2#randint(20,height-20)
+		self.x = randint(80,width-80)     #width/2#randint(20,width-20)
+		self.y = randint(100,260)   #20#height/2#randint(20,height-20)
 		self.direction = randint(0, 359)
 		self.max_vel = 2
 		self.rotation_vel = 6
@@ -368,7 +369,6 @@ class Creature:
 		else:
 			self.left_sensor_detect = 0
 
-
 		if self.periphery+90 > (-angle + self.direction)%360 > 180-self.periphery :
 			self.right_sensor_detect = 1
 		else:
@@ -394,6 +394,7 @@ class Creature:
 				else:
 					self.right_sensor_detect_bullet = 0
 
+			# if in proximity with bullet
 			if dist((b.x, b.y), (self.x, self.y)) < 20:
 				self.health -= randint(30,75)
 				hit_by_bullet = 1
@@ -401,8 +402,6 @@ class Creature:
 
 
 		wall_proximity_ = wall_proximity(self.x, self.y)
-
-
 		
 		# draw id
 		#font = pygame.font.SysFont("Corbel", 20)
@@ -417,20 +416,14 @@ class Creature:
 				does_damage_to_player = 1
 
 		if self.health < 0:
-			if hit_by_bullet:
-				# if player kills creature, health increases
-				p.health += 3
 			self.die()
-
-
-		#move direction
 
 		# inputs to NN including bias unit
 		inupts = np.array((1, self.left_sensor_detect, self.right_sensor_detect, self.distance2player / dist((0,0), (width, height)), self.left_sensor_detect_bullet, self.right_sensor_detect_bullet, wall_proximity_ ) )
 
 		[output_direction, output_velocity] = self.make_decision(inupts, self.T1, self.T2)  #randint(-200,100)/100.
 
-		# move
+		# move TODO concat
 		collided_x = (self.x < 0 or self.x > width)
 		collided_y = (self.y < 0 or self.y > height)
 
@@ -467,7 +460,6 @@ class Creature:
 			stationary = 1
 
 
-
 		# REWARDS
 		# average distance to player
 		self.fitness = ( (dist((0,0), (width, height)) - self.avg_distance2player) / 100. )**2
@@ -494,7 +486,6 @@ class Creature:
 
 
 	def make_decision(self, inputs, T1, T2):
-
 		# LAYER 1 (input layer)		
 		#print inputs		
 
@@ -529,21 +520,6 @@ class Creature:
 
 		return Creature(_id, T1, T2)
 
-'''class Level:
-	def __init__(self, matrix):
-		self.colours = matrix[2]
-		self.map = matrix[3:]
-		self.w = len(self.map[0])
-		self.h = len(self.map)
-
-
-
-	def display(self):
-		for i in range(self.h-1):
-			for j in range(self.w-1):
-				if self.map[i][j] == "#":
-					pygame.draw.rect(screen, (200,200,200), (j*width/self.w, i*height/self.h, width/self.w, height/self.h))
-'''
 
 class Scene:
 	def __init__(self):
@@ -603,6 +579,20 @@ class GamePlayScene(Scene):
 		pygame.mixer.music.play(-1)
 
 	def render(self):
+		# event handling
+		if game.key_right:
+			game.player.direction -= 3
+		if game.key_left:
+			game.player.direction += 3
+
+		if game.key_up:
+			game.player.vel = game.player.max_vel
+		else:
+			game.player.vel = 0
+
+		if game.key_space:
+			game.player.shoot()
+
 		screen.fill((0,0,0))
 
 		for creature in game.creatures:
@@ -614,16 +604,6 @@ class GamePlayScene(Scene):
 				creature.display()
 		
 		game.player.display()
-
-		if game.key_right:
-			game.player.direction -= 3
-		if game.key_left:
-			game.player.direction += 3
-
-		if game.key_up:
-			game.player.vel = game.player.max_vel
-		else:
-			game.player.vel = 0
 
 
 		# show fitness of creatures
@@ -656,46 +636,108 @@ class GamePlayScene(Scene):
 
 class GameIntroScene(Scene):
 	''' Parts of this scene:
-	1. Darwin appears, is hovering, "Skip intro" button at bottom right (go to part 4), "Press space to continue"
+	1. Darwin is hovering
+	   "Skip intro" button at bottom right (go to part 4)
 	2. "Evil Dr Darwin is trying to breed the ultimate killing creature"
-	2. "Every generation the best killer creatures survive"
-	3. "Kill the creatures by leading them into walls or shooting them"
-	4. Creatures move directly down from Darwin, Darwin dropping sprite
-	5. Creatures move to their positions
+	   "Press space to continue"
+	3. "Every generation the best killer creatures survive"
+	4. "Kill the creatures by leading them into walls or shooting them"
+	5. Creatures move directly down from Darwin, Darwin dropping sprite
+	6. Creatures move to their positions
 	6. 
 	'''
 	def __init__(self):
 		Scene.__init__(self)
 		self.creature_init_pos = None
 		self.darwin = Darwin()
+		# darwin positions without hovering effect
+		self.darwin_x = self.darwin.x
+		self.darwin_y = self.darwin.y
 		self.part = 1
 		# time since part started
 		self.part_start = 0
 
+		self.skip_button = Button("Skip intro", (width-180, height-60))
+		def skip_button_action():
+			self.part = 6
+		self.skip_button.mouse_up = skip_button_action
+
+		self.prefaces = [NORMAL_FONT.render("%s" % (preface), False, (255,255,255)) for preface in [ "Evil Dr Darwin is trying to breed the ultimate killing creature", "Every generation the best killer creatures survive", "Kill the creatures by leading them into walls or shooting them"]]
+
 	def begin(self):
+		# initial positions of creatures
 		self.creature_init_pos = [ (creature.x, creature.y) for creature in game.creatures ]
+		# time that part started
 		self.part_start = pygame.time.get_ticks()
 
 	def render(self):
+		# time since part started
+		part_time = pygame.time.get_ticks() - self.part_start
+
 		screen.fill((0,0,0))
-		if self.part == 1:
 
-			self.darwin.display(hover_timer=self.part_start)
-
+		# parts are in reverse order so 2 parts arent rendered on the same render call
+		if self.part == 6:
+			duration = 1000
 			for creature in game.creatures:
 				creature.display()
+			if part_time > duration:
+				self.go_to(game.GAMEPLAY)
 
 		# creature animation
 		if self.part == 5:
 			duration = 1200
 			# move from darwin to positions
 			for index, creature in enumerate(game.creatures):
-				creature.x = self.creature_init_pos[index][0] + (self.darwin.x - self.creature_init_pos[index][0]) * (pygame.time.get_ticks() - self.part_start) / duratiom
-				creature.y = self.creature_init_pos[index][1] + (self.darwin.y + 60 - self.creature_init_pos[index][1]) * (pygame.time.get_ticks() - self.part_start) / duration
-			if pygame.time.get_ticks() - self.part_start == duration:
+				creature.x = self.darwin_x + (self.creature_init_pos[index][0] - self.darwin_x) * (part_time) / duration
+				creature.y = self.darwin_y + 90 + (self.creature_init_pos[index][1] - self.darwin_y - 90) * (part_time) / duration
+				creature.display()
+			if part_time > duration:
+				# set creature positions to their initial positions
+				for index, creature in enumerate(game.creatures):
+					creature.x, creature.y = self.creature_init_pos[index]
 				self.part += 1
-		if self.part == 6:
-			self.go_to(game.GAMEPLAY)
+				self.part_start = pygame.time.get_ticks()
+
+		if self.part == 4:
+			duration = 1000
+			# move from darwin to positions
+			for index, creature in enumerate(game.creatures):
+				creature.x = self.darwin_x
+				creature.y = self.darwin_y + 90 * (part_time) / duration
+				creature.display()
+			if part_time > duration:
+				self.part += 1
+				self.part_start = pygame.time.get_ticks()
+
+		if self.part == 3:
+			screen.blit(self.prefaces[1], (width/2-self.prefaces[1].get_rect().width/2, height/2))
+			# avoid double press
+			if game.key_space and part_time > 500:
+				self.part += 1
+				self.part_start = pygame.time.get_ticks()
+			self.skip_button.add(screen)
+
+		if self.part == 2:
+			screen.blit(self.prefaces[0], (width/2-self.prefaces[0].get_rect().width/2, height/2))
+
+			if game.key_space:
+				self.part += 1
+				self.part_start = pygame.time.get_ticks()
+			self.skip_button.add(screen)
+
+		if self.part == 1:
+			duration = 1000
+
+			if part_time > duration:
+				self.part += 1
+				self.part_start = pygame.time.get_ticks()
+			self.skip_button.add(screen)
+
+		print self.part
+
+		game.player.display(intro_mode=True)
+		self.darwin.display(hover=True)
 
 class HowToPlayScene(Scene):
 	def __init__(self):
@@ -787,8 +829,7 @@ class Game:
 					if event.key == K_DOWN:
 						self.key_down = True			
 					if event.key == K_SPACE:
-						self.key_down = True
-						self.player.shoot()
+						self.key_space = True
 
 				if event.type == KEYUP:
 					if event.key == K_RIGHT: 
@@ -800,7 +841,7 @@ class Game:
 					if event.key == K_DOWN:
 						self.key_down = False		
 					if event.key == K_SPACE:
-						self.key_down = False
+						self.key_space = False
 
 			self.scene.update()
 			self.scene.render()
