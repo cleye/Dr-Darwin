@@ -43,7 +43,7 @@ DARWIN_DROP_IMAGE = ["resources/darwin_dropping1.bmp", "resources/darwin_droppin
 
 GAMEPLAY_SONG = "resources/abnormal.ogg"
 
-HEADER_FONT = pygame.font.SysFont("Corbel", 50)
+HEADER_FONT = pygame.font.SysFont("Consolas", 50)
 NORMAL_FONT = pygame.font.SysFont("Consolas", 20)
 
 '''class Renderer:
@@ -90,13 +90,13 @@ def wall_proximity(x,y):
 	''' Returns a number proportional to the square distance to wall '''
 	_x = _y = 0
 	if x < 60:
-		_x = (x-60)**2 / 1000
+		_x = (x-60)**2 / 1000.
 	if x > width-60:
-		_x = (x-(width-60))**2 / 1000
+		_x = (x-(width-60))**2 / 1000.
 	if y < 60:
-		_y = (y-60)**2 / 1000
+		_y = (y-60)**2 / 1000.
 	if y > height-60:
-		_y = (y-(height-60))**2 / 1000
+		_y = (y-(height-60))**2 / 1000.
 	return (_x + _y)/2
 
 def g(z):
@@ -196,7 +196,7 @@ class Player:
 			pygame.draw.rect(screen, (60,190,100), (self.x-30, self.y-20, self.health*60/100, 6), 0)
 			pygame.draw.rect(screen, (255,255,255), (self.x-30, self.y-20, 60, 6), 1)
 
-		# TODO cant hit wall
+		self.health -= wall_proximity(self.x, self.y)/3.6
 
 		for index, b in enumerate(self.bullets):
 			if b.outside_screen():
@@ -295,7 +295,8 @@ class Creature:
 		else:
 			self.T2 = T2
 
-	def display(self):
+
+	def display(self, intro_mode=False):
 		#screen.blit(self.image, self.rect)
 
 		# positions of left and right sensors
@@ -320,23 +321,25 @@ class Creature:
 			pygame.draw.ellipse(screen, (20,130,220), (left_sensor_pos[0]-8, left_sensor_pos[1]-8, 16, 16))
 			pygame.draw.ellipse(screen, (20,130,220), (right_sensor_pos[0]-8, right_sensor_pos[1]-8, 16, 16))
 
-			# draws bullet sensors
-			if self.left_sensor_detect_bullet:
-				pygame.draw.ellipse(screen, (230,130,130), (left_sensor_pos[0]-6, left_sensor_pos[1]-6, 12, 12))
-			if self.right_sensor_detect_bullet:
-				pygame.draw.ellipse(screen, (230,130,130), (right_sensor_pos[0]-6, right_sensor_pos[1]-6, 12, 12))
-			# draws player sensors
-			if self.left_sensor_detect:
-				pygame.draw.ellipse(screen, (100,230,20), (left_sensor_pos[0]-4, left_sensor_pos[1]-4, 8, 8))
-			if self.right_sensor_detect:
-				pygame.draw.ellipse(screen, (100,230,20), (right_sensor_pos[0]-4, right_sensor_pos[1]-4, 8, 8))
+			# in the intro to the game, omit the sensors and health bar
+			if not intro_mode:
+				# draws bullet sensors
+				if self.left_sensor_detect_bullet:
+					pygame.draw.ellipse(screen, (230,130,90), (left_sensor_pos[0]-6, left_sensor_pos[1]-6, 12, 12))
+				if self.right_sensor_detect_bullet:
+					pygame.draw.ellipse(screen, (230,130,90), (right_sensor_pos[0]-6, right_sensor_pos[1]-6, 12, 12))
+				# draws player sensors
+				if self.left_sensor_detect:
+					pygame.draw.ellipse(screen, (100,230,20), (left_sensor_pos[0]-4, left_sensor_pos[1]-4, 8, 8))
+				if self.right_sensor_detect:
+					pygame.draw.ellipse(screen, (100,230,20), (right_sensor_pos[0]-4, right_sensor_pos[1]-4, 8, 8))
 
 
-			# draw health bar
-			#pygame.draw.rect(screen, (215,30,70), (self.x-30, self.y-20, 60, 6))
-			pygame.draw.rect(screen, (60,190,100), (self.x-30, self.y-20, self.health*60/100, 6), 0)
-			pygame.draw.rect(screen, (255,255,255), (self.x-30, self.y-20, 60, 6), 1)
-			
+				# draw health bar
+				#pygame.draw.rect(screen, (215,30,70), (self.x-30, self.y-20, 60, 6))
+				pygame.draw.rect(screen, (60,190,100), (self.x-30, self.y-20, self.health*60/100, 6), 0)
+				pygame.draw.rect(screen, (255,255,255), (self.x-30, self.y-20, 60, 6), 1)
+				
 
 		# draw sensors to player
 		#pygame.draw.polygon(screen, (100,2,2),   ( (left_sensor_pos[0] + cos(-self.periphery+90-self.direction)*20, left_sensor_pos[1] + sin(-self.periphery+90-self.direction)*20), left_sensor_pos, (left_sensor_pos[0] + cos(self.periphery-self.direction)*20, left_sensor_pos[1] + sin(self.periphery-self.direction)*20)), 0 if left_sensor_detect else 2  ) 
@@ -379,6 +382,13 @@ class Creature:
 		self.right_sensor_detect_bullet = 0
 		hit_by_bullet = 0
 		for b in p.bullets:
+			# if in proximity with bullet
+			if dist((b.x, b.y), (self.x, self.y)) < 20:
+				self.health -= randint(30,75)
+				hit_by_bullet = 1
+				p.bullets.remove(b)
+				break
+
 			angle = angle_between( (self.x, self.y), (b.x, b.y) )
 
 			# if bullet is moving in direction of creature
@@ -393,12 +403,6 @@ class Creature:
 					self.right_sensor_detect_bullet = 1
 				else:
 					self.right_sensor_detect_bullet = 0
-
-			# if in proximity with bullet
-			if dist((b.x, b.y), (self.x, self.y)) < 20:
-				self.health -= randint(30,75)
-				hit_by_bullet = 1
-				p.bullets.remove(b)
 
 
 		wall_proximity_ = wall_proximity(self.x, self.y)
@@ -433,8 +437,9 @@ class Creature:
 			self.die()
 		else:
 			self.direction += self.rotation_vel*(output_direction-0.5)
-			self.x += self.max_vel*output_velocity*sin(self.direction)
-			self.y += self.max_vel*output_velocity*cos(self.direction)
+			# this ensures a minimum velocity of 25% max vel
+			self.x += self.max_vel * (0.25 + 0.75*output_velocity) * sin(self.direction)
+			self.y += self.max_vel * (0.25 + 0.75*output_velocity) * cos(self.direction)
 			self.health -= output_velocity*0.04*(1 + game.generation/5)
 
 		# rotate
@@ -469,8 +474,6 @@ class Creature:
 		self.fitness_rewards += self.left_sensor_detect/200. + self.right_sensor_detect/200.
 		# time with player in both sensors
 		self.fitness_rewards += 0.1 if (self.left_sensor_detect and self.right_sensor_detect) else 0
-		# veloctiy
-		self.fitness_rewards += output_velocity/40.
 
 		# PUNISHMENTS
 		# being stationary
@@ -508,12 +511,12 @@ class Creature:
 		return a3
 
 	def die(self):
-		# TODO add animation
 		self.alive = False
 		self.dying = True
 		self.dying_start = pygame.time.get_ticks()
 
 	def mutated_child(self, _id, mutability=0.07):
+		# TODO fix mutation
 		# new theta values (chromosomes) come from multiplying current theta values by random amount
 		T1 = self.T1 * (1 + np.random.random((self.s[2], self.s[1]+1))*mutability)
 		T2 = self.T2 * (1 + np.random.random((self.s[3], self.s[2]+1))*mutability)
@@ -523,8 +526,9 @@ class Creature:
 
 class Scene:
 	def __init__(self):
-		# since scene began
+		# when scene began
 		self.start = 0
+		# since scene began
 		self.frame = 0
 		self.time = 0
 
@@ -538,6 +542,7 @@ class Scene:
 	def begin(self):
 		pass
 
+	# change scene
 	def go_to(self, new_scene):
 		game.scene = new_scene
 		# time when scene began
@@ -657,10 +662,12 @@ class GameIntroScene(Scene):
 		# time since part started
 		self.part_start = 0
 
-		self.skip_button = Button("Skip intro", (width-180, height-60))
+		self.skip_button = Button("Skip intro >", (width-210, height-60))
 		def skip_button_action():
-			self.part = 6
+			self.part = 7
 		self.skip_button.mouse_up = skip_button_action
+
+		self.press_space = NORMAL_FONT.render("Press space to continue", False, (230,230,230))
 
 		self.prefaces = [NORMAL_FONT.render("%s" % (preface), False, (255,255,255)) for preface in [ "Evil Dr Darwin is trying to breed the ultimate killing creature", "Every generation the best killer creatures survive", "Kill the creatures by leading them into walls or shooting them"]]
 
@@ -677,21 +684,22 @@ class GameIntroScene(Scene):
 		screen.fill((0,0,0))
 
 		# parts are in reverse order so 2 parts arent rendered on the same render call
-		if self.part == 6:
+		if self.part == 7:
 			duration = 1000
 			for creature in game.creatures:
-				creature.display()
+				creature.display(intro_mode=True)
+			self.darwin.y = self.darwin_y - 100 * part_time / duration
 			if part_time > duration:
 				self.go_to(game.GAMEPLAY)
 
 		# creature animation
-		if self.part == 5:
+		if self.part == 6:
 			duration = 1200
 			# move from darwin to positions
 			for index, creature in enumerate(game.creatures):
 				creature.x = self.darwin_x + (self.creature_init_pos[index][0] - self.darwin_x) * (part_time) / duration
 				creature.y = self.darwin_y + 90 + (self.creature_init_pos[index][1] - self.darwin_y - 90) * (part_time) / duration
-				creature.display()
+				creature.display(intro_mode=True)
 			if part_time > duration:
 				# set creature positions to their initial positions
 				for index, creature in enumerate(game.creatures):
@@ -699,16 +707,24 @@ class GameIntroScene(Scene):
 				self.part += 1
 				self.part_start = pygame.time.get_ticks()
 
-		if self.part == 4:
+		if self.part == 5:
 			duration = 1000
 			# move from darwin to positions
 			for index, creature in enumerate(game.creatures):
 				creature.x = self.darwin_x
 				creature.y = self.darwin_y + 90 * (part_time) / duration
-				creature.display()
+				creature.display(intro_mode=True)
 			if part_time > duration:
 				self.part += 1
 				self.part_start = pygame.time.get_ticks()
+
+		if self.part == 4:
+			screen.blit(self.prefaces[2], (width/2-self.prefaces[2].get_rect().width/2, height/2))
+			# avoid double press
+			if game.key_space and part_time > 500:
+				self.part += 1
+				self.part_start = pygame.time.get_ticks()
+			self.skip_button.add(screen)
 
 		if self.part == 3:
 			screen.blit(self.prefaces[1], (width/2-self.prefaces[1].get_rect().width/2, height/2))
@@ -720,6 +736,7 @@ class GameIntroScene(Scene):
 
 		if self.part == 2:
 			screen.blit(self.prefaces[0], (width/2-self.prefaces[0].get_rect().width/2, height/2))
+			screen.blit(self.press_space, (width/2-self.press_space.get_rect().width/2, height-40))
 
 			if game.key_space:
 				self.part += 1
@@ -734,10 +751,11 @@ class GameIntroScene(Scene):
 				self.part_start = pygame.time.get_ticks()
 			self.skip_button.add(screen)
 
-		print self.part
-
 		game.player.display(intro_mode=True)
-		self.darwin.display(hover=True)
+		if self.part != 7:
+			self.darwin.display(hover=True)
+		else:
+			self.darwin.display()
 
 class HowToPlayScene(Scene):
 	def __init__(self):
@@ -780,7 +798,7 @@ class Game:
 
 		
 
-	def new_generation(self, population=20):
+	def new_generation(self, population=30):
 		# if first generation create new creatures
 		if self.generation == 0:
 			for i in range(population):
@@ -839,7 +857,8 @@ class Game:
 					if event.key == K_UP: 
 						self.key_up = False				
 					if event.key == K_DOWN:
-						self.key_down = False		
+						self.key_down = False	
+						print self.creatures[0].T1, self.creatures[0].T2	
 					if event.key == K_SPACE:
 						self.key_space = False
 

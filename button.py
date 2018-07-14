@@ -16,7 +16,7 @@ def _mouse_down_(button):
 
 class Button:
     buttons = []
-    style_default = {"font":pygame.font.SysFont("Corbel", 30),"visible":True,"padding":(4,8,4,8),"border":(1,(242,242,242)),"bgcolor":(0,0,0),"txcolor":(242,242,242)}
+    style_default = {"font":pygame.font.SysFont("Consolas", 25),"visible":True,"padding":(4,8,4,8),"border":(1,(255,255,255)),"bgcolor":(0,0,0),"txcolor":(255,255,255)}
 
     def __init__(self,text="Button",pos=(0,0)):
 
