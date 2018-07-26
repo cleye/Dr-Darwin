@@ -18,7 +18,7 @@ class Button:
     buttons = []
     style_default = {"font":pygame.font.SysFont("Consolas", 25),"visible":True,"padding":(4,8,4,8),"border":(1,(255,255,255)),"bgcolor":(0,0,0),"txcolor":(255,255,255)}
 
-    def __init__(self,text="Button",pos=(0,0)):
+    def __init__(self,text="Button",pos=(0,0), w=None, h=None):
 
         # GENERAL
         self.text = text
@@ -37,10 +37,14 @@ class Button:
         self.bgcolor = Button.style_default["bgcolor"]
         self.txcolor = Button.style_default["txcolor"]
         self.text_width,self.text_height = self.font.size(self.text)
-        self.w = self.text_width+self.padding[1]+self.padding[3]
-        self.h = self.text_height+self.padding[0]+self.padding[2]
-        self.width = self.text_width+self.padding[1]+self.padding[3]+self.border[0]*2
-        self.height = self.text_height+self.padding[0]+self.padding[2]+self.border[0]*2
+        if w is None and h is None:
+            self.w = self.text_width+self.padding[1]+self.padding[3]
+            self.h = self.text_height+self.padding[0]+self.padding[2]
+        else:
+            self.w = w
+            self.h = h
+        self.width = self.w+self.border[0]*2
+        self.height = self.h+self.border[0]*2
         self.surface = pygame.Surface((self.width,self.height))
 
     def add(self,surface):
@@ -50,7 +54,9 @@ class Button:
                 pygame.draw.rect(self.surface,self.border[1],(0,0,self.width,self.height))
             pygame.draw.rect(self.surface,self.bgcolor,(self.border[0],self.border[0],self.w,self.h))
             self.surface.unlock()
-            self.surface.blit(self.font.render(self.text,True,self.txcolor),(self.padding[1]+self.border[0]*2,self.padding[0]+self.border[0]*2))
+
+            text_img = self.font.render(self.text,True,self.txcolor)
+            self.surface.blit(text_img, (self.width/2 - text_img.get_rect().width/2, self.height/2 - text_img.get_rect().height/2))
 
             Button.buttons.append(self)
             surface.blit(self.surface,(self.x,self.y))
