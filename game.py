@@ -20,22 +20,9 @@ frame_time = 0.0
 frame = 1
 # time since last frame
 frame_time = 0
+# if first time playing game
+first_time = True
 
-LEVEL = '''
-background
-(31, 31, 94)
-..#................#..
-...#..............#...
-....#............#....
-.....#..........#.....
-......#........#......
-.......#......#.......
-.......#..............
-.......#..............
-......................
-......................
-......................
-'''.split("\n")
 
 MUTANT_IMAGE = "resources/mutant_.png"
 PLAYER_IMAGE = "resources/player_1.png"
@@ -47,6 +34,7 @@ WALL_IMAGE = "resources/wall.png"
 GAMEPLAY_SONG = "resources/abnormal.ogg"
 GAMEINTRO_SONG = "resources/peanut_butter.ogg"
 MAINMENU_SONG = "resources/deep.ogg"
+GAMEOVER_SONG = "resources/ded.ogg"
 
 SHOOT_SOUND = "resources/shooting.ogg"
 
@@ -573,46 +561,25 @@ class MainMenuScene(Scene):
 	def __init__(self):
 		Scene.__init__(self)
 
-		self.play_button = Button("Play", (width/2-100, 160), 200, 60)
+		self.play_button = Button("Play", (width/2-100, height-200), 200, 80)
+		self.play_button.font = pygame.font.SysFont("Consolas", 30)
 		def play_action():
 			game.reset()
 			self.go_to(game.GAMEINTRO)
 		self.play_button.mouse_up = play_action
-
-		# how to play button
-		self.htp_button = Button("How to play", (width/2-100, 260), 200, 60)
-		self.htp_button.w = 200
-		def htp_action():
-			self.go_to(game.HOW_TO_PLAY)
-		self.htp_button.mouse_up = htp_action
 		
 		self.header_image = HEADER_FONT.render("Darwin", False, (255,255,255))
 
 		# creature for demo
 		self.creature = Creature(0, demo=True)
 
-	def begin(self, first_scene=False):
-		# if the game has just been opened
-		self.first_scene = first_scene
-		if first_scene:
-			self.left_arrow = pygame.image.load("resources/left_arrow.png")
-			self.right_arrow = pygame.image.load("resources/right_arrow.png")
-
+	def begin(self):
 		pygame.mixer.music.load(MAINMENU_SONG)
 		#pygame.mixer.music.play(-1)
 
 	def render(self):
-
 		screen.fill((0,0,0))
 		self.play_button.add(screen)
-
-		# if first scene display oscillating arrow pointing at how to play button
-		if self.first_scene:
-			screen.blit(self.left_arrow, (width/2 + 100 + 20 + 10 + 20*sin(self.time/4.0), 270))
-			screen.blit(self.right_arrow, (width/2 - 100 - 48 - 20 - 10 - 20*sin(self.time/4.0), 270))
-
-
-		self.htp_button.add(screen)
 		screen.blit(self.header_image, (width/2 - self.header_image.get_rect().width/2, 40))
 
 
@@ -623,9 +590,13 @@ class GamePlayScene(Scene):
 		self.wall = pygame.image.load(WALL_IMAGE).convert_alpha()
 
 	def begin(self):
+		global first_time
 		game.player.reset()
 		pygame.mixer.music.load(GAMEPLAY_SONG)
 		#pygame.mixer.music.play(-1)
+
+		if first_time:
+			first_time = False
 
 	def render(self):
 		# event handling
@@ -689,15 +660,17 @@ class GamePlayScene(Scene):
 
 class GameIntroScene(Scene):
 	''' Parts of this scene:
-	1. Darwin is hovering
-	   "Skip intro" button at bottom right (go to part 4)
-	2. "Evil Dr Darwin is trying to breed the ultimate killing creature"
-	   "Press space to continue"
-	3. "Every generation the best killer creatures survive"
-	4. "Kill the creatures by leading them into walls or shooting them"
+	If first scene:
+		1. Darwin is hovering
+		   "Skip intro" button at bottom right (go to part 4)
+		2. 1st how-to image
+		3. 2nd how-to image
+		4. 3rd how-to image
+	
+	4.5. Darwin moves from top
 	5. Creatures move directly down from Darwin, Darwin dropping sprite
 	6. Creatures move to their positions
-	6. 
+ 
 	'''
 	def __init__(self):
 		Scene.__init__(self)
@@ -717,13 +690,17 @@ class GameIntroScene(Scene):
 		self.press_space = NORMAL_FONT.render("Press space to continue", False, (230,230,230))
 
 		self.prefaces = [NORMAL_FONT.render("%s" % (preface), False, (255,255,255)) for preface in [ "Evil Dr Darwin is trying to breed the ultimate killing creature", "Every generation the best killer creatures survive", "Kill the creatures by leading them into walls or shooting them"]]
+		self.howtos = [pygame.image.load(image).convert_alpha() for image in ["resources/howto1.png","resources/howto2.png"]]
 
 	def begin(self):
+		if first_time:
+			self.part = 1
+		else:
+			self.part = 5
 		# initial positions of creatures
 		self.creature_init_pos = [ (creature.x, creature.y) for creature in game.creatures ]
 		# time that part started
 		self.part_start = pygame.time.get_ticks()
-		self.part = 1
 		# play music
 		pygame.mixer.music.load(GAMEINTRO_SONG)
 		#pygame.mixer.music.play(-1)
@@ -779,7 +756,7 @@ class GameIntroScene(Scene):
 			self.skip_button.add(screen)
 
 		if self.part == 3:
-			screen.blit(self.prefaces[1], (width/2-self.prefaces[1].get_rect().width/2, height/2))
+			screen.blit(self.howtos[1], (width/2-self.prefaces[1].get_rect().width/2, height/2))
 			screen.blit(self.press_space, (width/2-self.press_space.get_rect().width/2, height-40))
 			# avoid double press
 			if game.key_space and part_time > 500:
@@ -788,7 +765,7 @@ class GameIntroScene(Scene):
 			self.skip_button.add(screen)
 
 		if self.part == 2:
-			screen.blit(self.prefaces[0], (width/2-self.prefaces[0].get_rect().width/2, height/2))
+			screen.blit(self.howtos[0], (0, 0))
 			screen.blit(self.press_space, (width/2-self.press_space.get_rect().width/2, height-40))
 
 			if game.key_space:
@@ -843,6 +820,9 @@ class GameOverScene(Scene):
 			game.scene.part = 7
 		self.play_again_button.mouse_up = play_again_action
 
+	def begin(self):
+		pygame.mixer.music.load(GAMEOVER_SONG)
+		pygame.mixer.music.play(1)
 
 	def render(self):
 		screen.fill((0,0,0))
@@ -936,7 +916,7 @@ class Game:
 
 		done = False
 
-		self.scene.begin(first_scene=True)
+		self.scene.begin()
 
 		last_frame_time = 0
 
@@ -976,12 +956,6 @@ class Game:
 			self.scene.render()
 
 
-			'''temp_frame_time = current_frame_time - last_frame_time
-			while temp_frame_time > 0.0:
-				delta_time = min(temp_frame_time, 1/60.)
-				temp_frame_time -= delta_time'''
-
-
 			pygame.display.update()
 
 			frame += 1
@@ -1006,9 +980,12 @@ TODO
 test on windows
 gdd
 background environment
-clearer instructions/storyline
 complete music
+---------
 how to page
+clearer instructions/storyline/generations and mutation
++++ on first time pressing play button, outline how to play
+---------
 demo creature in main menu
 indication of fitness
 document code
