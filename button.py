@@ -80,22 +80,3 @@ class Button:
 
 
 
-
-
-
-'''def style_stuff(style,default):
-     for i in default: # visible: True  bgcolor: (0,0,0)
-        if not i in style.keys(): #True if style doesn't have it
-            style[i] = default[i]
-     return style
-
-
-#conditional assignment because i am lazy
-def _(condition,true,false=None):
-    if not false:
-        true,false = condition,true
-
-    if condition:
-        return true
-    else:
-        return false'''
